@@ -1,0 +1,6 @@
+/target/
+/dist/
+/.mcp.json
+/.codex/
+__pycache__/
+*.pyc

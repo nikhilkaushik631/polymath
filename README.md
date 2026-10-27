@@ -1,0 +1,44 @@
+# Polymath
+
+One local macOS application for PDFs, source files, documents, spreadsheets, presentations, images, audio and video. Reader, PDF Tools, Writer, Sheets, Slides and Images share one Home screen and window. Each workspace keeps its work when you switch. Motion remains a separate browser application.
+
+The current source targets **Polymath 0.4.9**. Build the app with the commands below, then open **dist/Polymath.app**, or install **dist/Polymath.dmg** by dragging Polymath to Applications after saving your work and quitting the previous version. The shared installer is `../installers/Polymath.dmg`; `~/Desktop/Polymath Installers` links to that folder. The application is named **Polymath**, with an original aperture icon. The earlier standalone applications can remain installed.
+
+- Markdown (`.md`) and plain text (`.txt`) open read-only in Reader. **Edit in Writer** opens the original in their shared editor; Save As offers Markdown and plain-text formats. CSV (`.csv`) opens as a spreadsheet in Sheets.
+- Home → Open file selects the right workspace automatically. Its six cards enter Reader, PDF Tools, Writer, Sheets, Slides or Images; the compact top bar returns to Home without discarding open work. ⌘0–⌘6 switch workspaces, and ⌘O opens a file.
+- Reader previews PDFs, Word documents, spreadsheets and presentations without changing the originals. It remembers each PDF or office preview's page and resumes there when the file opens again, including after restarting the app. Star a file in Reader to add it to the local Favorites list on Reader's landing page; favorites do not change the document. Office files render locally into an in-memory PDF; **Edit in Writer/Sheets/Slides** opens the original. It also views source text such as `.py`, `.js`, `.tsx`, `.html`, `.json`, and `.rs`. Source view is read-only, with line numbers, find, and copy; UTF-8 and BOM-marked UTF-16 files up to 16 MB are accepted. Unknown extensions also open if their contents are valid text. Finder Open With, Dock drops and window drops also work.
+- Source and Markdown previews show a resizable outline beside the document when headings or code declarations are found. Click an outline entry to jump to its line. The outline uses native egui docking and a virtualized table; it never edits or executes the file.
+- A dot marks a workspace with unsaved changes or unfinished image tasks. Quit checks every workspace; Review returns you to the editor to save.
+- Web links clicked in a document show their destination before opening in your default browser. Email links use the default mail app. Polymath rejects file and script links from documents; it never becomes the system browser.
+- Home keeps recent files and chosen folders together in its main library section, with no library sidebar. Search by filename and use the rounded file-type filters for Reader files, documents, sheets, slides or images. Long filenames and paths expose their full values on hover.
+- Home → Add folder uses the normal macOS picker. Only selected folders are listed; the Folder menu or sidebar context menu removes a folder without deleting its files. No recursive scans or symlink traversal.
+- Home uses locally embedded Inter typography, illustrated Reader and PDF Tools surfaces, four editor cards with original document previews, and a first-run library panel. At smaller widths the featured surfaces stack. Hover and keyboard focus highlight the cards; Settings → Appearance → Reduce motion turns off transitions.
+- The Lucide sun/moon icon switches the interface theme, with an accessible label and tooltip. Light and dark themes use neutral surfaces with distinct, restrained workspace colors. Interface scale is 125%; editor sidebars retain their narrow defaults.
+- PDF Tools is separate from the focused Reader view. Its catalog starts fully expanded for combine, split/organize, compress, conversion, OCR, security, editing and review. See [PDF tools](docs/PDF_TOOLS.md) for current capabilities and gaps.
+- Opening an image shows a read-only viewer first, with Fit/zoom/pan controls and **Edit in Images** in the top bar. The viewer does not import or alter the original. Images uses Lightcraft's non-destructive editor and a local library under `~/Library/Application Support/Polymath/Images Library`; choosing Edit adds the original in place to that library. Export writes to the path you choose.
+- Reader plays local MP3, M4A/AAC, WAV/AIFF/CAF, FLAC, Ogg/Opus, MP4/M4V/MOV, WebM and MKV files inside the Polymath window. The queue finds other files of the same media type in the opened file’s folder and plays them in order; Previous and Next work in the player. Music can be sorted by name, artist or album using tags when present. Video has an immersive full-screen view. Opening reads and checks the file on a worker thread; decoding begins when you press Play. Supported video streams are H.264, HEVC, VP9 and AV1, subject to the codec/container combination. Files over 512 MB are outside this player’s limit. Unsupported codecs show an error. Playback uses the existing DeckCraft Rust media engine and local audio output, with no network request.
+- The microphone in the shared toolbar dictates into the focused text field using a bundled local Whisper model. The gear or ⌘, opens one Settings window for appearance, chosen folders, dictation language (including Indian languages), and PDF narration voices. In Reader, Settings → Voice reads the open PDF aloud from the current page with a chosen installed macOS voice. See [Voice](docs/VOICE.md).
+
+Preferences live in `~/Library/Application Support/Polymath/preferences.json`. On first launch, existing settings are read from the previous Iris Suite location; recovery data remains available. No account, telemetry, cloud sync, update check or control server is started by normal launches. Local bundles are ad-hoc signed, not Apple-notarized; the packaging scripts do not change macOS security settings.
+
+## Build
+
+Keep this directory beside the five editor checkouts (`reader`, `writer`, `sheets`, `slides`, `lightcraft`) and `speech-engine`, the local whisper.cpp checkout. Rust 1.95 is pinned. Use one Cargo job on this Mac; the cache is shared with Reader.
+
+The Polymath Git repository contains the combined app, not snapshots of the sibling engines. The current local editor checkouts have uncommitted integration changes, so a fresh clone of this repository and the public upstream engines will not reproduce this exact build yet. Preserve the existing sibling worktrees when building this version.
+
+```sh
+cmake -S ../speech-engine -B ../speech-engine/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_METAL=OFF
+cmake --build ../speech-engine/build --target whisper-cli -j 2
+cd ../speech-engine && sh ./models/download-ggml-model.sh small-q5_1 && cd ../polymath
+CARGO_BUILD_JOBS=1 cargo build --locked --release
+./packaging/bundle.sh
+./packaging/build-dmg.sh
+open "dist/Polymath.app"
+```
+
+`packaging/icons.sh` reproducibly builds the PNG and macOS icon from `assets/icons/polymath.svg`. It needs librsvg and macOS iconutil. Packaging scripts require Python 3.11 or newer.
+
+See the [guide index](docs/README.md) for every workspace and [CODEX.md](CODEX.md) or [Using Polymath with coding agents](docs/USING_WITH_AGENTS.md) for the opt-in authenticated control channel and project-local Claude/Codex connection. See [architecture](docs/ARCHITECTURE.md) for integration details and limitations. See [local validation](docs/VALIDATION.md) for the checks and tested platform. Upstream licenses and attribution are retained; see NOTICE and ATTRIBUTION.md.
+
+To explicitly make an installed Polymath the default for 119 supported file extensions, run `swift packaging/default-documents.swift --set /Applications/Polymath.app`. This includes PDFs, office files, most source code, images, audio and video. HTML (`.html`, `.htm`) stays with your browser so web links keep opening there; Polymath can still open an HTML file through **Open With** or its own file picker. The utility backs up existing handlers under `~/Library/Application Support/Polymath/`; `--check` verifies each handler and checks that Polymath is not the HTTP or HTTPS handler. The app and DMG never change defaults automatically. Archives such as `.zip` and legacy Excel `.xls` are not included because their workflows are not implemented.

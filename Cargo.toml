@@ -1,0 +1,63 @@
+[package]
+name = "polymath"
+version = "0.4.9"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "One local Polymath workspace for documents, images, audio, and video"
+
+[workspace]
+
+[dependencies]
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "wgpu", "accesskit", "persistence"] }
+egui = "0.36"
+egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
+pdfcraft-ui-egui = { path = "../reader/crates/ui-egui" }
+pdfcraft-engine = { path = "../reader/crates/engine" }
+wordcraft-ui-egui = { path = "../writer/crates/ui-egui" }
+gridcraft-ui-egui = { path = "../sheets/crates/ui-egui" }
+deckcraft-ui-egui = { path = "../slides/crates/ui-egui" }
+lightcraft-ui-egui = { path = "../lightcraft/crates/ui-egui" }
+lightcraft-engine = { path = "../lightcraft/crates/engine" }
+lightcraft-codecs = { path = "../lightcraft/crates/codecs" }
+lightcraft-raster = { path = "../lightcraft/crates/raster" }
+lightcraft-raw = { path = "../lightcraft/crates/raw" }
+lightcraft-geom = { path = "../lightcraft/crates/geom" }
+wordcraft-doc = { path = "../writer/crates/doc" }
+deckcraft-media = { path = "../slides/crates/media" }
+symphonia = { version = "0.5.5", default-features = false }
+cpal = "0.16"
+open = "5"
+wordcraft-engine = { path = "../writer/crates/engine" }
+gridcraft-engine = { path = "../sheets/crates/engine" }
+deckcraft-engine = { path = "../slides/crates/engine" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.17"
+image = { version = "0.25", default-features = false, features = ["png"] }
+getrandom = "0.4"
+base64 = "0.22"
+arboard = { version = "3.6", features = ["image-data"] }
+pollster = "1"
+log = "0.4"
+egui_dock = "0.21.1"
+egui-shadcn = { path = "vendor/egui-shadcn" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+fmv-macos-events = "=0.1.0"
+craft-quit = { git = "https://github.com/storytold/craft-libs", rev = "a01382de4f5415b5a7a9133093be47c9488c1b6b", features = ["egui"] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.36", features = ["eframe", "wgpu"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[patch.crates-io]
+hayro-interpret = { path = "../reader/vendor/hayro-interpret" }
+hayro = { path = "../reader/vendor/hayro" }
+hayro-syntax = { path = "../reader/vendor/hayro-syntax" }
+hayro-jbig2 = { path = "../reader/vendor/hayro-jbig2" }
+lopdf = { path = "../reader/vendor/lopdf" }
+winit = { path = "../reader/vendor/winit" }
+egui-wgpu = { path = "../reader/vendor/egui-wgpu" }

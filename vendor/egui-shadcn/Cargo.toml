@@ -1,0 +1,19 @@
+[package]
+name = "egui-shadcn"
+version = "0.5.0"
+edition = "2024"
+license = "MIT"
+description = "Polymath compatibility port of egui-shadcn 0.5.0 for egui 0.36"
+repository = "https://github.com/FerrisMind/shadcn-rs"
+
+[dependencies]
+egui = "0.36"
+log = "0.4"
+lucide-icons = "0.575"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.11"
+serde = { version = "1", features = ["derive"] }
+
+[features]
+default = []
+# The upstream plotting adapter is not part of Polymath's UI build.

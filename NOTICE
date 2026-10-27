@@ -1,0 +1,11 @@
+Polymath combines the locally modified pdfcraft, wordcraft, gridcraft, deckcraft and lightcraft projects by Storytold and their contributors. All five original engines, formats, contributor credits and required notices are retained.
+
+The Polymath application shell, folded-aperture icon and workspace symbols are original contributions, licensed under MIT OR Apache-2.0. Native file-dialog, print, clipboard, audio and local-folder adapters are adapted from those permissively licensed sibling projects.
+
+Full upstream license texts, third-party font and artwork attribution, and required notices are included inside Polymath.app/Contents/Resources/licenses, grouped by source repository. The source checkouts remain in ../reader, ../writer, ../sheets, ../slides and ../lightcraft. Lightcraft's trademark artwork in its docs/brand folder is not used as Polymath branding.
+
+Local dictation bundles whisper.cpp and a converted OpenAI Whisper model under their MIT licenses. Their notices are in Contents/Resources/licenses/whisper. PDF narration uses macOS voices already installed on the user's machine.
+
+The native interface includes an egui 0.36 compatibility port of egui-shadcn 0.5.0 by FerrisMind, MIT licensed. Its source and license are in vendor/egui-shadcn; the license is also included in the application bundle.
+
+The macOS quit path uses craft-quit from Storytold craft-libs at commit a01382de4f5415b5a7a9133093be47c9488c1b6b, licensed under MIT OR Apache-2.0. Its license texts are in assets/licenses/craft-quit and the application bundle.
