@@ -134,9 +134,9 @@ def editor_case(ext: str, source: Path) -> dict:
     before = digest(local)
     with app_session(label) as call:
         opened = call("app.open", {"path": str(local)})
-        assert opened["workspace"] == ("reader" if ext == ".md" else workspace), opened
-        if ext == ".md":
-            assert call("app.open", {"path": str(local), "edit": True})["workspace"] == "writer"
+        assert opened["workspace"] == "reader", opened
+        if ext != ".pdf":
+            assert call("app.open", {"path": str(local), "edit": True})["workspace"] == workspace
         inspected = call("document.inspect", {"workspace": workspace})
         assert inspected, "Empty document inspection"
         def execute(command: str, params: dict | None = None):
@@ -153,7 +153,7 @@ def editor_case(ext: str, source: Path) -> dict:
             output.unlink(missing_ok=True)
             execute("file.saveAs", {"path": str(output)})
             assert output.is_file() and output.stat().st_size > 0
-            call("app.open", {"path": str(output)})
+            call("app.open", {"path": str(output), "edit": True})
             assert "Polymath end-to-end check." in json.dumps(call("document.inspect", {"workspace": workspace}))
         elif ext in {".xlsx", ".csv"}:
             execute("cell.set", {"cell": "A500", "input": "72849"})
@@ -161,7 +161,7 @@ def editor_case(ext: str, source: Path) -> dict:
             output.unlink(missing_ok=True)
             execute("file.saveAs", {"path": str(output)})
             assert output.is_file() and output.stat().st_size > 0
-            call("app.open", {"path": str(output)})
+            call("app.open", {"path": str(output), "edit": True})
             assert execute("cell.get", {"cell": "A500"})["value"] == 72849
         else:
             count = len(inspected["slides"])
@@ -170,7 +170,7 @@ def editor_case(ext: str, source: Path) -> dict:
             output.unlink(missing_ok=True)
             execute("file.saveAs", {"path": str(output)})
             assert output.is_file() and output.stat().st_size > 0
-            call("app.open", {"path": str(output)})
+            call("app.open", {"path": str(output), "edit": True})
             assert len(call("document.inspect", {"workspace": workspace})["slides"]) == count + 1
     assert digest(source) == original_before, "Original changed"
     return {"workspace": workspace, "input_bytes": local.stat().st_size, "opened": True, "saved_and_reopened": True}
@@ -183,7 +183,8 @@ def image_case(ext: str, source: Path) -> dict:
     output = QA / f"edited-{label}.png"
     output.unlink(missing_ok=True)
     with app_session(label) as call:
-        assert call("app.open", {"path": str(local)})["workspace"] == "images"
+        assert call("app.open", {"path": str(local)})["workspace"] == "reader"
+        assert call("app.open", {"path": str(local), "edit": True})["workspace"] == "images"
         deadline = time.monotonic() + 60
         while not call("document.inspect", {"workspace": "images"})["photo"]:
             if time.monotonic() > deadline:

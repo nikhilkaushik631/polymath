@@ -20,7 +20,7 @@ A control file must not already exist. `POLYMATH_NO_PREFS=1` disables preference
 ## Authoring workflow
 
 1. `polymath_inspect` shows the current workspace and every dirty workspace. Preserve unrelated work.
-2. `polymath_open {path}` routes by extension or valid plain-text content. Markdown and plain text open read-only in Reader and `edit:true` sends those formats to Writer. Images open in the read-only viewer and `edit:true` sends them to Images. Audio and video open in Reader's local player. For a read-only office preview, call `polymath_call {method:"app.preview",params:{path}}`; opening that path later with `polymath_open` enters its editor. `polymath_switch {workspace:"images"}` activates the desired editor. Workspaces are `reader`, `tools` (PDF Tools), `writer`, `sheets`, `slides`, `images`, `home`.
+2. `polymath_open {path}` opens a read-only Reader tab for every supported file type. `edit:true` deliberately opens the appropriate Writer, Sheets, Slides, Images, or Video editor. CSV and TSV appear as tables in Reader; office formats appear as in-memory PDF previews. Audio and video play locally in Reader. `polymath_switch {workspace:"images"}` activates the editor. Workspaces are `reader`, `tools` (PDF Tools), `writer`, `sheets`, `slides`, `images`, `video`, `home`.
 3. `polymath_commands {workspace}` returns the real command catalog and parameter descriptions. Inspect this before guessing command names or arguments.
 4. `polymath_execute {workspace,command,params}` runs a command in that editor. `polymath_document {workspace}` inspects the result.
 5. Save to a user-requested path. Reopen or inspect the saved file and render/check it. `polymath_screenshot {path}` captures the whole Polymath window; use a synthetic document for published evidence.
@@ -45,17 +45,30 @@ Full engine/control references remain in the sibling projects:
 | --- | --- | --- |
 | `app.inspect` | `{}` | Current workspace, theme, dirty workspaces and open counts |
 | `app.workspace` | `{workspace}` | Preserve sessions and change visible editor |
-| `app.open` | `{path, edit?: bool}` | Route a local file; Markdown/plain text preview in Reader unless `edit` is true |
+| `app.open` | `{path, edit?: bool}` | Open a local file in a Reader tab; `edit:true` enters the appropriate editor |
 | `app.preview` | `{path}` | View a local PDF, office, image, media, source or text file read-only in Reader; office conversion stays in memory |
+| `app.video.inspect` | `{}` | Inspect the Video editor timeline, audio choice and export state |
+| `app.video.add` | `{path}` | Add a local video clip to the editor timeline and enter Video |
+| `app.video.trim` | `{index:0,start:0.5,end:8.0}` | Set source-relative in/out seconds for a loaded clip |
+| `app.video.move` | `{from:1,to:0}` | Reorder a clip in the timeline |
+| `app.video.audio` / `app.video.audio.options` | `{path}` / `{start:0.5,gain:0.8}` | Add one local soundtrack; place it on the output timeline and set its level |
+| `app.video.mute` | `{original:true/false}` | Strip or keep the source clips' audio |
+| `app.video.quality` | `{preset:"original"|"high"|"balanced"|"small"}` | Choose an MP4 quality and size preset |
+| `app.video.output` / `app.video.export` | `{path:"/absolute/output.mp4"}` / `{}` | Choose a new destination, then explicitly start local FFmpeg export; inspect progress with `app.video.inspect` |
 | `app.reader.favorites` | `{}` | List local Reader favorites and saved one-based reading pages |
 | `app.reader.favorite` | `{value:true/false, path?:"/absolute/file"}` | Pin or unpin a local file; omitted path uses the active Reader file |
+| `app.reader.tabs` | `{}` | List Reader tabs with stable IDs, paths, active and dirty state |
+| `app.reader.select` | `{id?: string, path?: string}` | Activate an existing Reader tab |
+| `app.reader.close` | `{id?: string, path?: string}` | Close one Reader tab, defaulting to the active tab; unsaved PDFs ask before closing |
 | `app.media.inspect` | `{}` | Inspect the active audio/video file, codec, duration, playback state and folder queue summary |
 | `app.media.queue` | `{offset?: number, limit?: number}` | List up to 100 local queue entries per call, including real music tags when present |
 | `app.media.play` / `app.media.pause` | `{}` | Start or pause local playback in Reader |
 | `app.media.seek` | `{seconds: number}` | Seek to a nonnegative time in the active media file |
+| `app.media.volume` | `{value: number}` | Set local player volume from 0 (mute) to 1 (full); reflected in `app.media.inspect` |
 | `app.media.previous` / `app.media.next` | `{}` | Play the previous or next file in the opened folder's current order |
 | `app.media.sort` | `{by:"name"|"artist"|"album"}` | Reorder the local music queue without changing files |
-| `app.media.fullscreen` | `{enabled: bool}` | Enter or leave the video-only full-screen view |
+| `app.media.fullscreen` | `{enabled: bool}` | Enter or leave video or music full screen |
+| `app.image.fullscreen` | `{enabled: bool}` | Enter or leave the active read-only image's full-screen view |
 | `app.theme` | `{dark:true/false}` | Select the shared light/dark theme |
 | `app.settings` | `{page:"appearance"/"voice"/"files",visible:true/false}` | Open or close the shared Settings window for inspection; omitted fields open the current page |
 | `app.folders.choose` | `{}` | Show the native chooser; owner must answer |

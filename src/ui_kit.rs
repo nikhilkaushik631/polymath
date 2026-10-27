@@ -6,7 +6,43 @@ use egui_shadcn::{
     tokens::{ColorPalette, DEFAULT_FOCUS, DEFAULT_MOTION, DEFAULT_RADIUS},
 };
 
+/// Neutral chrome shared by the host bar, Home, and read-only viewers.
+/// Document canvases keep their own colors; workspace accents identify actions.
+#[derive(Clone, Copy)]
+pub(crate) struct Chrome {
+    pub canvas: Color32,
+    pub surface: Color32,
+    pub ink: Color32,
+    pub muted: Color32,
+    pub line: Color32,
+    pub hover: Color32,
+}
+
+pub(crate) fn chrome(dark: bool) -> Chrome {
+    let gray = Color32::from_gray;
+    if dark {
+        Chrome {
+            canvas: gray(22),
+            surface: gray(35),
+            ink: gray(240),
+            muted: gray(172),
+            line: gray(62),
+            hover: gray(49),
+        }
+    } else {
+        Chrome {
+            canvas: gray(250),
+            surface: Color32::WHITE,
+            ink: gray(25),
+            muted: gray(102),
+            line: gray(218),
+            hover: gray(237),
+        }
+    }
+}
+
 pub(crate) fn theme(dark: bool, workspace: Workspace) -> Theme {
+    let chrome = chrome(dark);
     let mut palette = if dark {
         ColorPalette::dark()
     } else {
@@ -26,15 +62,15 @@ pub(crate) fn theme(dark: bool, workspace: Workspace) -> Theme {
         Color32::WHITE
     };
     palette.ring = accent;
-    palette.background = Color32::from_gray(if dark { 22 } else { 250 });
-    palette.foreground = Color32::from_gray(if dark { 240 } else { 25 });
-    palette.card = Color32::from_gray(if dark { 35 } else { 255 });
+    palette.background = chrome.canvas;
+    palette.foreground = chrome.ink;
+    palette.card = chrome.surface;
     palette.card_foreground = palette.foreground;
-    palette.border = Color32::from_gray(if dark { 68 } else { 214 });
-    palette.secondary = Color32::from_gray(if dark { 42 } else { 237 });
+    palette.border = chrome.line;
+    palette.secondary = chrome.hover;
     palette.secondary_foreground = palette.foreground;
     palette.muted = palette.secondary;
-    palette.muted_foreground = Color32::from_gray(if dark { 172 } else { 95 });
+    palette.muted_foreground = chrome.muted;
     Theme {
         palette,
         motion: DEFAULT_MOTION,

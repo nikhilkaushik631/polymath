@@ -22,12 +22,15 @@ mod media_view;
 mod office_preview;
 mod print;
 mod reader_memory;
+mod reader_tabs;
 mod services;
 mod settings;
 mod source_view;
 mod storage;
 mod theme_button;
 mod ui_kit;
+mod video_editor;
+mod video_pipeline;
 mod voice;
 mod workspace;
 use serde_json::{Value, json};
@@ -51,12 +54,17 @@ struct Polymath {
     source: Option<source_view::SourceFile>,
     media: Option<media_view::MediaView>,
     image_preview: Option<image_view::ImageView>,
+    active_preview_id: Option<u64>,
+    inactive_reader_previews: Vec<reader_tabs::PreviewSlot>,
+    reader_tab_order: Vec<reader_tabs::TabId>,
+    next_reader_preview_id: u64,
     office_previews: HashMap<pdfcraft_engine::DocId, String>,
     writer: wordcraft_ui_egui::WordApp,
     sheets: gridcraft_ui_egui::SheetApp,
     slides: deckcraft_ui_egui::SlideApp,
     images: lightcraft_ui_egui::LightcraftApp,
     images_error: Option<String>,
+    video_editor: video_editor::VideoEditor,
     active: Workspace,
     next: Option<Workspace>,
     dark: bool,
@@ -147,12 +155,17 @@ impl Polymath {
             source: None,
             media: None,
             image_preview: None,
+            active_preview_id: None,
+            inactive_reader_previews: Vec::new(),
+            reader_tab_order: Vec::new(),
+            next_reader_preview_id: 1,
             office_previews: HashMap::new(),
             writer,
             sheets,
             slides,
             images,
             images_error,
+            video_editor: video_editor::VideoEditor::new(),
             active: Workspace::Home,
             next: None,
             dark: false,
@@ -241,6 +254,9 @@ impl Polymath {
                         .running_cancellable()
                         .is_empty()
             }
+            Workspace::Video => {
+                self.video_editor.has_unsaved_work() || self.video_editor.has_export_running()
+            }
         }
     }
     fn dirty_workspaces(&self) -> Vec<Workspace> {
@@ -260,6 +276,11 @@ impl Polymath {
                     let _ = media.set_fullscreen(ctx, false);
                 }
             }
+            if let Some(image) = &mut self.image_preview
+                && image.fullscreen
+            {
+                image.set_fullscreen(ctx, false);
+            }
         }
         self.active = w;
         if matches!(
@@ -269,6 +290,7 @@ impl Polymath {
                 | Workspace::Tools
                 | Workspace::Sheets
                 | Workspace::Images
+                | Workspace::Video
         ) {
             ctx.set_zoom_factor(1.25);
         }
@@ -281,6 +303,7 @@ impl Polymath {
             }
             Workspace::Reader => {
                 self.reader.host_read_only = true;
+                self.reader.host_tabs = true;
                 self.reader.host_tools_workspace = false;
                 self.reader.mode = pdfcraft_ui_egui::Mode::Read;
                 self.reader.default_mode = pdfcraft_ui_egui::Mode::Read;
@@ -293,6 +316,7 @@ impl Polymath {
             }
             Workspace::Tools => {
                 self.reader.host_read_only = false;
+                self.reader.host_tabs = false;
                 self.reader.host_tools_workspace = true;
                 self.reader.mode = pdfcraft_ui_egui::Mode::AllTools;
                 self.reader.default_mode = pdfcraft_ui_egui::Mode::AllTools;
@@ -305,6 +329,10 @@ impl Polymath {
             Workspace::Sheets => self.sheets.activate_in_host(),
             Workspace::Slides => self.slides.activate_in_host(),
             Workspace::Images => self.images.activate_in_host(ctx),
+            Workspace::Video => {
+                home_fonts::install(ctx);
+                self.home_theme(ctx);
+            }
         }
         ctx.memory_mut(|m| m.surrender_focus(m.focused().unwrap_or(egui::Id::NULL)));
         ctx.request_repaint();
@@ -330,7 +358,7 @@ impl Polymath {
         self.dark = dark;
         self.apply_theme();
         match self.active {
-            Workspace::Home => self.home_theme(ctx),
+            Workspace::Home | Workspace::Video => self.home_theme(ctx),
             Workspace::Reader
                 if self.source.is_some()
                     || self.media.is_some()
@@ -344,6 +372,7 @@ impl Polymath {
         ctx.request_repaint();
     }
     fn home_theme(&self, ctx: &egui::Context) {
+        let chrome = ui_kit::chrome(self.dark);
         ctx.set_theme(if self.dark {
             egui::Theme::Dark
         } else {
@@ -357,15 +386,31 @@ impl Polymath {
             },
             ..Default::default()
         };
-        style.visuals.override_text_color =
-            Some(egui::Color32::from_gray(if self.dark { 238 } else { 24 }));
-        style.visuals.weak_text_color =
-            Some(egui::Color32::from_gray(if self.dark { 170 } else { 100 }));
+        style.visuals.override_text_color = Some(chrome.ink);
+        style.visuals.weak_text_color = Some(chrome.muted);
+        style.visuals.panel_fill = chrome.canvas;
+        style.visuals.window_fill = chrome.surface;
+        style.visuals.widgets.inactive.weak_bg_fill = chrome.surface;
+        style.visuals.widgets.hovered.weak_bg_fill = chrome.hover;
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, chrome.line);
+        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, chrome.line);
         style.visuals.selection.bg_fill =
             egui::Color32::from_gray(if self.dark { 80 } else { 210 });
         style.visuals.selection.stroke = egui::Stroke::new(1.0, style.visuals.text_color());
         style.spacing.button_padding = egui::vec2(12.0, 8.0);
         style.spacing.item_spacing = egui::vec2(10.0, 10.0);
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(11.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(18.0));
         ctx.set_style_of(
             if self.dark {
                 egui::Theme::Dark
@@ -376,9 +421,18 @@ impl Polymath {
         );
     }
     fn open(&mut self, path: &str, ctx: &egui::Context) -> Result<Value, String> {
-        self.open_routed(path, ctx, false)
+        // Every ordinary open enters a visible Reader tab. Editing is an explicit handoff.
+        self.open_in_reader(path, ctx)
     }
     fn open_for_edit(&mut self, path: &str, ctx: &egui::Context) -> Result<Value, String> {
+        if workspace::is_video_path(Path::new(path)) {
+            self.video_editor.add_clip_path(path.into(), ctx)?;
+            self.activate(Workspace::Video, ctx);
+            self.recent.retain(|recent| recent != path);
+            self.recent.insert(0, path.to_owned());
+            self.recent.truncate(16);
+            return Ok(json!({"workspace":"video","requested":path}));
+        }
         self.open_routed(path, ctx, true)
     }
     fn open_routed(
@@ -389,6 +443,7 @@ impl Polymath {
     ) -> Result<Value, String> {
         let p = Path::new(path);
         if !p.is_file() {
+            self.recent.retain(|item| item != path);
             return Err(format!("File not found: {path}"));
         }
         let route = Workspace::for_path(p);
@@ -426,57 +481,45 @@ impl Polymath {
         } else {
             None
         };
-        if let Some(previous) = &mut self.media
-            && previous.fullscreen
-        {
-            let _ = previous.set_fullscreen(ctx, false);
-        }
         if w == Workspace::Images
             && let Some(error) = &self.images_error
         {
             return Err(error.clone());
         }
-        // Switch before opening; the same editor instance retains every other workspace's edits.
         if w == Workspace::Reader {
-            let non_pdf_mode_changed =
-                (self.source.is_some() || self.media.is_some() || self.image_preview.is_some())
-                    != (source.is_some() || media.is_some() || image_preview.is_some());
-            self.source = source;
-            self.media = media;
-            self.image_preview = image_preview;
-            if non_pdf_mode_changed && self.active == Workspace::Reader {
-                if self.source.is_some() || self.media.is_some() || self.image_preview.is_some() {
-                    home_fonts::install(ctx);
-                    self.home_theme(ctx);
-                } else {
+            if let Some(source) = source {
+                self.open_reader_preview(reader_tabs::Preview::Source(source), ctx);
+            } else if let Some(media) = media {
+                self.open_reader_preview(reader_tabs::Preview::Media(media), ctx);
+            } else if let Some(image) = image_preview {
+                self.open_reader_preview(reader_tabs::Preview::Image(image), ctx);
+            } else {
+                self.stash_reader_preview(ctx);
+                self.activate(Workspace::Reader, ctx);
+                if self.active == Workspace::Reader {
                     self.reader.activate_in_host();
                 }
+                self.reader.open_path(path);
+                self.sync_reader_tabs();
             }
-        }
-        self.activate(w, ctx);
-        match w {
-            Workspace::Reader
-                if self.source.is_none()
-                    && self.media.is_none()
-                    && self.image_preview.is_none() =>
-            {
-                self.reader.open_path(path)
+        } else {
+            // Switching to an editor retains all other open Reader and editor state.
+            self.activate(w, ctx);
+            match w {
+                Workspace::Writer => {
+                    self.writer.run("file.open", json!({"path":path}))?;
+                    self.writer.ui.backstage = false;
+                }
+                Workspace::Sheets => {
+                    self.sheets.run("file.open", json!({"path":path}))?;
+                }
+                Workspace::Slides => self.slides.open_path(path)?,
+                Workspace::Images => {
+                    lightcraft_ui_egui::import::start_paths(&mut self.images, vec![path.into()])?;
+                    self.images.ui.view = lightcraft_ui_egui::state::ViewMode::Detail;
+                }
+                Workspace::Home | Workspace::Reader | Workspace::Tools | Workspace::Video => {}
             }
-            Workspace::Reader => {}
-            Workspace::Tools => {}
-            Workspace::Writer => {
-                self.writer.run("file.open", json!({"path":path}))?;
-                self.writer.ui.backstage = false;
-            }
-            Workspace::Sheets => {
-                self.sheets.run("file.open", json!({"path":path}))?;
-            }
-            Workspace::Slides => self.slides.open_path(path)?,
-            Workspace::Images => {
-                lightcraft_ui_egui::import::start_paths(&mut self.images, vec![path.into()])?;
-                self.images.ui.view = lightcraft_ui_egui::state::ViewMode::Detail;
-            }
-            Workspace::Home => {}
         }
         self.recent.retain(|p| p != path);
         self.recent.insert(0, path.into());
@@ -486,7 +529,14 @@ impl Polymath {
     fn open_in_reader(&mut self, path: &str, ctx: &egui::Context) -> Result<Value, String> {
         let file = Path::new(path);
         if !file.is_file() {
+            self.recent.retain(|item| item != path);
             return Err(format!("File not found: {path}"));
+        }
+        if self.select_reader_path(path, ctx) {
+            self.recent.retain(|item| item != path);
+            self.recent.insert(0, path.to_owned());
+            self.recent.truncate(16);
+            return Ok(json!({"workspace":"reader","requested":path,"readOnly":true}));
         }
         let ext = file
             .extension()
@@ -494,15 +544,17 @@ impl Polymath {
             .unwrap_or("")
             .to_ascii_lowercase();
         if ext == "pdf" {
-            return self.open(path, ctx);
+            let mut opened = self.open_routed(path, ctx, false)?;
+            opened["readOnly"] = json!(true);
+            return Ok(opened);
         }
         if workspace::MEDIA_EXTENSIONS.contains(&ext.as_str()) {
-            let mut opened = self.open(path, ctx)?;
+            let mut opened = self.open_routed(path, ctx, false)?;
             opened["readOnly"] = json!(true);
             return Ok(opened);
         }
         if Workspace::for_path(file) == Ok(Workspace::Images) {
-            let mut opened = self.open(path, ctx)?;
+            let mut opened = self.open_routed(path, ctx, false)?;
             opened["readOnly"] = json!(true);
             return Ok(opened);
         }
@@ -522,8 +574,6 @@ impl Polymath {
                 | "xltm"
                 | "xlsb"
                 | "ods"
-                | "csv"
-                | "tsv"
                 | "pptx"
                 | "potx"
                 | "ppsx"
@@ -534,30 +584,28 @@ impl Polymath {
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("Document");
+            self.stash_reader_preview(ctx);
+            self.reader.host_read_only = true;
+            self.reader.host_tabs = true;
             self.reader
                 .open_bytes(&format!("{name} · preview.pdf"), None, pdf)?;
-            self.source = None;
-            self.media = None;
-            self.image_preview = None;
             let (_, id) = self
                 .reader
                 .active_ids()
                 .ok_or("The office preview did not open")?;
             self.office_previews.insert(id, path.to_owned());
-        } else {
-            self.source = Some(source_view::SourceFile::load(file)?);
-            self.media = None;
-            self.image_preview = None;
-        }
-        if self.active == Workspace::Reader {
-            if self.source.is_some() || self.media.is_some() || self.image_preview.is_some() {
-                home_fonts::install(ctx);
-                self.home_theme(ctx);
-            } else {
+            self.sync_reader_tabs();
+            if self.active == Workspace::Reader {
                 self.reader.activate_in_host();
+            } else {
+                self.activate(Workspace::Reader, ctx);
             }
+        } else {
+            self.open_reader_preview(
+                reader_tabs::Preview::Source(source_view::SourceFile::load(file)?),
+                ctx,
+            );
         }
-        self.activate(Workspace::Reader, ctx);
         self.recent.retain(|p| p != path);
         self.recent.insert(0, path.to_owned());
         self.recent.truncate(16);
@@ -711,7 +759,7 @@ impl Polymath {
         }
     }
     fn summary(&self) -> Value {
-        json!({"application":"Polymath","workspace":self.active,"dark":self.dark,"dirtyWorkspaces":self.dirty_workspaces(),"quitConfirmation":self.quit_requested,"localFolders":self.folders,"recent":self.recent,"source":self.source.as_ref().map(|file| json!({"path":file.path,"language":file.language,"lines":file.line_count()})),"imagePreview":self.image_preview.as_ref().map(|image| image.inspect()),"media":self.media.as_ref().map(|media| media.inspect()),"editors":{"reader":self.reader.session.docs().len(),"writer":1,"sheets":self.sheets.session.documents().len(),"slides":self.slides.session.documents().len(),"images":self.images.session.catalog.len()},"imagesError":self.images_error})
+        json!({"application":"Polymath","workspace":self.active,"dark":self.dark,"dirtyWorkspaces":self.dirty_workspaces(),"quitConfirmation":self.quit_requested,"localFolders":self.folders,"recent":self.recent,"readerTabs":self.reader_tabs_json(),"source":self.source.as_ref().map(|file| json!({"path":file.path,"language":file.language,"lines":file.line_count()})),"imagePreview":self.image_preview.as_ref().map(|image| image.inspect()),"media":self.media.as_ref().map(|media| media.inspect()),"videoEditor":self.video_editor.inspect(),"editors":{"reader":self.reader.session.docs().len(),"writer":1,"sheets":self.sheets.session.documents().len(),"slides":self.slides.session.documents().len(),"images":self.images.session.catalog.len(),"video":self.video_editor.inspect()["clipCount"]},"imagesError":self.images_error})
     }
 }
 impl eframe::App for Polymath {
@@ -762,6 +810,7 @@ impl eframe::App for Polymath {
                     egui::Key::Num4 => switch = Some(Workspace::Slides),
                     egui::Key::Num5 => switch = Some(Workspace::Images),
                     egui::Key::Num6 => switch = Some(Workspace::Tools),
+                    egui::Key::Num7 => switch = Some(Workspace::Video),
                     _ => return true,
                 }
                 return false;
@@ -871,6 +920,7 @@ impl eframe::App for Polymath {
             Workspace::Sheets => self.sheets.logic(ctx),
             Workspace::Slides => self.slides.logic(ctx),
             Workspace::Images => self.images.logic(ctx),
+            Workspace::Video => {}
         }
         if self.active == Workspace::Reader {
             if let Some(media) = &mut self.media {
@@ -880,6 +930,7 @@ impl eframe::App for Polymath {
                 image.tick(ctx);
             }
         }
+        self.video_editor.tick(ctx);
         if self
             .reading_memory
             .sync(&mut self.reader, &self.office_previews)
@@ -893,6 +944,14 @@ impl eframe::App for Polymath {
             self.reading_memory_saved_at = Instant::now();
         }
         self.sync_editor_recent(true);
+        if let Some(path) = self.video_editor.take_exported_path()
+            && let Some(path) = path.to_str()
+        {
+            self.recent.retain(|recent| recent != path);
+            self.recent.insert(0, path.to_owned());
+            self.recent.truncate(16);
+            self.save_preferences();
+        }
         home_fonts::add_indic_system_fallbacks(ctx);
         // Editor appearance controls feed the shared palette as well as the top-bar toggle.
         let chosen_dark = match self.active {
@@ -944,8 +1003,21 @@ impl eframe::App for Polymath {
         self.collect_shots(ctx);
     }
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        if !self.media.as_ref().is_some_and(|media| media.fullscreen) {
+        let full_screen = self.active == Workspace::Reader
+            && (self.reader.full_screen
+                && self.source.is_none()
+                && self.media.is_none()
+                && self.image_preview.is_none()
+                || self.media.as_ref().is_some_and(|media| media.fullscreen)
+                || self
+                    .image_preview
+                    .as_ref()
+                    .is_some_and(|image| image.fullscreen));
+        if !full_screen {
             self.bar(ui, frame);
+            if self.active == Workspace::Reader {
+                self.reader_tabs_ui(ui);
+            }
         }
         ui.push_id(self.active.label(), |ui| match self.active {
             Workspace::Home => self.home(ui, frame),
@@ -980,6 +1052,7 @@ impl eframe::App for Polymath {
                     self.images.ui(ui);
                 }
             }
+            Workspace::Video => self.video_editor.show(ui, frame, self.dark),
         });
         let requested = match self.active {
             Workspace::Writer => self.writer.external_url_requested.take(),
@@ -1078,16 +1151,36 @@ impl eframe::App for Polymath {
             });
         }
         if let Some(message) = self.notice.clone() {
-            egui::Window::new("Polymath")
-                .collapsible(false)
-                .resizable(false)
-                .show(ui.ctx(), |ui| {
-                    ui.set_max_width(460.0);
-                    ui.label(message);
-                    if ui.button("OK").clicked() {
-                        self.notice = None;
+            let colors = ui_kit::chrome(self.dark);
+            let missing = message.strip_prefix("File not found: ");
+            let modal = egui::Modal::new(egui::Id::new("polymath-notice")).show(ui.ctx(), |ui| {
+                ui.set_width(420.0);
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new(if missing.is_some() { "File unavailable" } else { "Couldn't complete the action" })
+                        .size(18.0).strong().color(colors.ink));
+                    ui.add_space(8.0);
+                    if let Some(path) = missing {
+                        ui.label(egui::RichText::new("The file may have moved or been deleted. It has been removed from Recent files.").size(13.0).color(colors.muted));
+                        ui.add_space(12.0);
+                        egui::Frame::NONE.fill(colors.canvas).stroke(egui::Stroke::new(1.0, colors.line))
+                            .corner_radius(9).inner_margin(egui::Margin::same(12)).show(ui, |ui| {
+                                ui.add(egui::Label::new(egui::RichText::new(path).size(12.0).color(colors.ink)).wrap().selectable(true));
+                            });
+                    } else {
+                        ui.add(egui::Label::new(egui::RichText::new(&message).size(13.0).color(colors.muted)).wrap());
                     }
+                    ui.add_space(16.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(egui::Button::new(egui::RichText::new("Dismiss").color(colors.surface)).fill(colors.ink).stroke(egui::Stroke::NONE))
+                            .on_hover_text("Close this notice").clicked() {
+                            self.notice = None;
+                        }
+                    });
                 });
+            });
+            if modal.should_close() {
+                self.notice = None;
+            }
         }
         self.issue_shots(ui.ctx());
         self.dialogs.show(frame);
@@ -1204,6 +1297,91 @@ mod tests {
         app.queue_external_link("file:///private/notes.txt".into());
         assert!(app.external_link.is_none());
         assert!(app.notice.is_some());
+    }
+    #[test]
+    fn reader_first_open_keeps_switchable_and_closable_file_tabs() {
+        let ctx = egui::Context::default();
+        let mut app = app(&ctx);
+        let dir = std::env::temp_dir().join(format!(
+            "polymath-reader-tabs-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("scratch directory");
+        let note = dir.join("notes.md");
+        let table = dir.join("budget.csv");
+        let pdf = dir.join("book.pdf");
+        std::fs::write(&note, "# Notes\nKeep this tab open.").expect("markdown");
+        std::fs::write(&table, "Name,Amount\nPaper,12\n").expect("csv");
+        std::fs::write(&pdf, b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 400] >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF").expect("pdf");
+        let note = note.to_string_lossy().into_owned();
+        let table = table.to_string_lossy().into_owned();
+        let pdf = pdf.to_string_lossy().into_owned();
+        for path in [&note, &table, &pdf] {
+            app.open(path, &ctx).expect("open in Reader");
+            assert_eq!(app.active, Workspace::Reader);
+            assert_eq!(app.current_reader_path().as_deref(), Some(path.as_str()));
+        }
+        assert_eq!(app.reader_tabs().len(), 3);
+        assert_eq!(app.reader_tabs().iter().filter(|tab| tab.active).count(), 1);
+        assert!(app.select_reader_path(&note, &ctx));
+        assert_eq!(app.current_reader_path().as_deref(), Some(note.as_str()));
+        assert!(app.select_reader_path(&table, &ctx));
+        assert_eq!(app.current_reader_path().as_deref(), Some(table.as_str()));
+        let note_id = app.find_reader_tab_by_path(&note).expect("note tab");
+        assert!(app.close_reader_tab(note_id, &ctx));
+        assert_eq!(app.reader_tabs().len(), 2);
+        assert!(!app.select_reader_path(&note, &ctx));
+        assert!(app.close_reader_item(&ctx));
+        assert_eq!(app.reader_tabs().len(), 1);
+        assert_eq!(app.current_reader_path().as_deref(), Some(pdf.as_str()));
+        std::fs::remove_dir_all(dir).expect("remove scratch directory");
+    }
+    #[test]
+    fn missing_recent_file_is_pruned_on_open() {
+        let ctx = egui::Context::default();
+        let mut app = app(&ctx);
+        let path = format!("/missing/polymath-{}-not-here.pdf", std::process::id());
+        app.recent.push(path.clone());
+        assert!(app.open(&path, &ctx).is_err());
+        assert!(!app.recent.contains(&path));
+    }
+    #[test]
+    fn reader_selects_remaining_preview_after_confirmed_pdf_close() {
+        let ctx = egui::Context::default();
+        let mut app = app(&ctx);
+        let dir = std::env::temp_dir().join(format!(
+            "polymath-reader-close-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("scratch directory");
+        let note = dir.join("remaining.txt");
+        std::fs::write(&note, "Keep reading").expect("text fixture");
+        let note = note.to_string_lossy().into_owned();
+        app.open(&note, &ctx).expect("open text");
+        let pdf = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 400] >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF";
+        app.stash_reader_preview(&ctx);
+        app.reader
+            .open_bytes("temporary.pdf", None, pdf.to_vec())
+            .expect("open PDF");
+        app.sync_reader_tabs();
+        assert!(matches!(
+            app.active_reader_tab(),
+            Some(reader_tabs::TabId::Pdf(_))
+        ));
+        let index = app.reader.active.expect("active PDF");
+        app.reader.close_tab(index); // The save prompt resolves through this same Reader close path.
+        app.ensure_reader_tab(&ctx);
+        assert_eq!(app.current_reader_path().as_deref(), Some(note.as_str()));
+        assert_eq!(app.reader_tabs().len(), 1);
+        std::fs::remove_dir_all(dir).expect("remove scratch directory");
     }
     #[test]
     fn editor_histories_and_new_saves_appear_in_home_recent() {

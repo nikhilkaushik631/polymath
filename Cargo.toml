@@ -1,6 +1,6 @@
 [package]
 name = "polymath"
-version = "0.4.9"
+version = "0.4.11"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "One local Polymath workspace for documents, images, audio, and video"
@@ -36,6 +36,7 @@ rfd = "0.17"
 image = { version = "0.25", default-features = false, features = ["png"] }
 getrandom = "0.4"
 base64 = "0.22"
+csv = "1.3"
 arboard = { version = "3.6", features = ["image-data"] }
 pollster = "1"
 log = "0.4"

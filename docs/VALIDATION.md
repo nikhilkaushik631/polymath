@@ -1,4 +1,22 @@
-# Local validation — Polymath 0.4.9, 2026-10-28
+# Local validation — Polymath 0.4.11, 2026-10-28
+
+Polymath 0.4.11 adds a separate native Video workspace. Videos still open in Reader first; Edit video deliberately adds a clip to a timeline. The editor supports frame thumbnails, trim handles and precise in/out values, drag or keyboard reorder, a separate soundtrack, original-audio stripping or mixing, quality presets, an explicit MP4 destination, progress and cancellation. The preview is a still frame scrubber; live composite playback, transitions and multiple soundtrack layers are not implemented. FFmpeg and ffprobe are installed locally and invoked on demand, not bundled.
+
+`CARGO_BUILD_JOBS=1 cargo check --release --locked`, the optimized one-job build, Rust formatting, Python syntax and whitespace checks passed. `tests/video_editor_e2e.py` passed on the final signed bundle: two synthetic two-second clips were trimmed to 1.5 seconds each, reordered and joined; decoded output pixels confirmed blue then red. The Small preset produced an 854 × 480 H.264/AAC MP4 of 3.021 seconds. The test verified source-audio stripping, a soundtrack delayed by 0.5 seconds, a second export that mixed the source and soundtrack, the finished file appearing in Home Recent, and unchanged SHA-256 hashes of every input. The light timeline screenshot was inspected after short clips were made to fill the available lane; its audio track and export control are visible.
+
+`tests/native_smoke.py` passed with light/dark screenshots and functional checks for Home, Reader, Writer, Sheets, Slides, Images, Video Studio, PDF and office previews, Markdown, CSV, SVG/source, media, save/reopen, tabs and quit guards. The empty Video Studio screenshot was inspected after its stage and track-lane redesign. `tests/downloads_e2e.py` passed on copies of local PDF, DOCX, MD, XLSX, CSV, PPTX, PNG, JPG and WebP files and PDF Tools operations; originals were not modified.
+
+The 0.4.11 bundle passed strict code-signature verification. `hdiutil verify` passed for its DMG; `dist/Polymath.dmg` and `../installers/Polymath.dmg` have the same SHA-256. The previous shared DMG was archived as `../installers/previous-versions/Polymath-0.4.10.dmg`. The old `/Applications/Polymath.app` process remained running and was left untouched, so this turn did not replace the installed app or recheck Launch Services defaults. The new app remains ad-hoc signed, without Apple notarization.
+
+Signed bundle executable SHA-256: `a35d0ebed7ba517d8ff1ef3b904efd8f85b6f453397c6f988209c64d43252d87`
+
+DMG SHA-256: `5de2931dd50cbb50ae9eba1951a5c9d5270a3746eb29e65822ccd6806c70f8c2`
+
+## Previous Polymath 0.4.10 validation — 2026-10-28
+
+Reader gained persistent tabs across PDF, office, code/text, CSV/TSV, image, audio and video previews. Ordinary opens route through Reader; editing requires an explicit handoff. The native CSV table preserves columns and horizontal scrolling. SVG previews render beside source, the long-source scrolling gap was removed, and PDF/office reading positions and Favorites remain local. Images and video gained pinch zoom and full screen; media queue and editor sidebars start closed, and Slides Notes start closed. The signed 0.4.10 bundle passed the native smoke suite, the Downloads copy-based regression suite, strict code-signature verification and DMG verification. The 0.4.10 DMG is now preserved under `../installers/previous-versions/`.
+
+## Previous Polymath 0.4.9 validation — 2026-10-28
 
 Polymath 0.4.9 uses the local egui-shadcn port for Reader's media transport, queue and sorting controls, and an egui_extras table for long folder queues. Reader opens local images as read-only previews with an Edit action, and plays local audio/video in its own view. A folder queue reads music title, artist and album tags, sorts by name/artist/album, advances to the next file automatically, and provides a native full-screen video view. The final light/dark music and full-screen video screenshots were inspected; an overlapping transport time label found in the first candidate was fixed before release.
 

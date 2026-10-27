@@ -35,12 +35,12 @@ def connect(endpoint,launch):
         time.sleep(.2)
     raise RuntimeError('Polymath did not start in time')
 
-WORKSPACES={'type':'string','enum':['home','reader','tools','writer','sheets','slides','images']}
+WORKSPACES={'type':'string','enum':['home','reader','tools','writer','sheets','slides','images','video']}
 def tool(name,description,properties,required=()):
     return {'name':name,'description':description,'inputSchema':{'type':'object','properties':properties,'required':list(required),'additionalProperties':False}}
 TOOLS=[
     tool('polymath_inspect','Inspect the shared workspace and all unsaved-change indicators.',{}),
-    tool('polymath_open','Open a local file in its viewer or editor. Images, Markdown and plain text open read-only in Reader; set edit=true to open Images or Writer. Does not discard unsaved Writer work.',{'path':{'type':'string'},'edit':{'type':'boolean'}},['path']),
+    tool('polymath_open','Open a local file in its viewer or editor. All supported files open read-only in Reader; set edit=true for a deliberate handoff to Writer, Sheets, Slides, Images or Video. Does not discard unsaved Writer work.',{'path':{'type':'string'},'edit':{'type':'boolean'}},['path']),
     tool('polymath_switch','Switch the visible workspace while retaining the other documents.',{'workspace':WORKSPACES},['workspace']),
     tool('polymath_commands','List actual editor command schemas and enablement before authoring.',{'workspace':WORKSPACES},['workspace']),
     tool('polymath_execute','Run a documented editor command. Save explicitly and inspect the result. Reader uses UI command IDs; use polymath_call for its view options.',{'workspace':WORKSPACES,'command':{'type':'string'},'params':{'type':'object'}},['workspace','command']),

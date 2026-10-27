@@ -60,6 +60,151 @@ impl Polymath {
                 },
                 None => control::error("missing path"),
             },
+            "app.video.inspect" => control::ok(self.video_editor.inspect()),
+            "app.video.add" => match p.get("path").and_then(Value::as_str) {
+                Some(path) if crate::workspace::is_video_path(std::path::Path::new(path)) => {
+                    match self.open_for_edit(path, ctx) {
+                        Ok(value) => control::ok(value),
+                        Err(error) => control::error(error),
+                    }
+                }
+                _ => control::error("Choose a local video path"),
+            },
+            "app.video.trim" => {
+                let index = p
+                    .get("index")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok());
+                let start = p.get("start").and_then(Value::as_f64);
+                let end = p.get("end").and_then(Value::as_f64);
+                match (index, start, end) {
+                    (Some(index), Some(start), Some(end)) => {
+                        match self.video_editor.set_clip_trim(index, start, end) {
+                            Ok(()) => control::ok(self.video_editor.inspect()),
+                            Err(error) => control::error(error),
+                        }
+                    }
+                    _ => control::error("Provide clip index, start and end seconds"),
+                }
+            }
+            "app.video.move" => {
+                let from = p
+                    .get("from")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok());
+                let to = p
+                    .get("to")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok());
+                match (from, to) {
+                    (Some(from), Some(to)) => match self.video_editor.move_clip(from, to) {
+                        Ok(()) => control::ok(self.video_editor.inspect()),
+                        Err(error) => control::error(error),
+                    },
+                    _ => control::error("Provide source and destination clip indexes"),
+                }
+            }
+            "app.video.audio" => match p.get("path").and_then(Value::as_str) {
+                Some(path) => match self.video_editor.set_audio_path(path.into(), ctx) {
+                    Ok(()) => control::ok(self.video_editor.inspect()),
+                    Err(error) => control::error(error),
+                },
+                None => control::error("Choose a local audio path"),
+            },
+            "app.video.audio.options" => {
+                let start = p.get("start").and_then(Value::as_f64);
+                let gain = p.get("gain").and_then(Value::as_f64);
+                match (start, gain) {
+                    (Some(start), Some(gain)) => {
+                        match self.video_editor.set_audio_options(start, gain as f32) {
+                            Ok(()) => control::ok(self.video_editor.inspect()),
+                            Err(error) => control::error(error),
+                        }
+                    }
+                    _ => control::error("Provide audio timeline start and gain"),
+                }
+            }
+            "app.video.mute" => match p.get("original").and_then(Value::as_bool) {
+                Some(mute) => {
+                    self.video_editor.set_mute_original(mute);
+                    control::ok(self.video_editor.inspect())
+                }
+                None => control::error("original must be a boolean"),
+            },
+            "app.video.quality" => {
+                let quality = match p.get("preset").and_then(Value::as_str) {
+                    Some("original") => Some(crate::video_pipeline::Quality::Original),
+                    Some("high") => Some(crate::video_pipeline::Quality::High),
+                    Some("balanced") => Some(crate::video_pipeline::Quality::Balanced),
+                    Some("small") => Some(crate::video_pipeline::Quality::Small),
+                    _ => None,
+                };
+                if let Some(quality) = quality {
+                    self.video_editor.set_quality(quality);
+                    control::ok(self.video_editor.inspect())
+                } else {
+                    control::error("preset must be original, high, balanced or small")
+                }
+            }
+            "app.video.output" => match p.get("path").and_then(Value::as_str) {
+                Some(path) => match self.video_editor.set_output_path(path.into()) {
+                    Ok(()) => control::ok(self.video_editor.inspect()),
+                    Err(error) => control::error(error),
+                },
+                None => control::error("Choose an output path"),
+            },
+            "app.video.export" => match self.video_editor.start_export() {
+                Ok(()) => control::ok(self.video_editor.inspect()),
+                Err(error) => control::error(error),
+            },
+            "app.image.fullscreen" => match (
+                &mut self.image_preview,
+                self.active == Workspace::Reader,
+                p.get("enabled").and_then(Value::as_bool),
+            ) {
+                (Some(image), true, Some(enabled)) => {
+                    image.set_fullscreen(ctx, enabled);
+                    control::ok(image.inspect())
+                }
+                (_, _, None) => control::error("enabled must be a boolean"),
+                _ => control::error("Open an image in Reader first"),
+            },
+            "app.reader.tabs" => control::ok(self.reader_tabs_json()),
+            "app.reader.select" => match p
+                .get("id")
+                .and_then(Value::as_str)
+                .and_then(crate::reader_tabs::TabId::parse)
+                .or_else(|| {
+                    p.get("path")
+                        .and_then(Value::as_str)
+                        .and_then(|path| self.find_reader_tab_by_path(path))
+                }) {
+                Some(id) if self.select_reader_tab(id, ctx) => control::ok(self.reader_tabs_json()),
+                _ => control::error("Choose an open Reader tab by id"),
+            },
+            "app.reader.close" => {
+                let target = p
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .and_then(crate::reader_tabs::TabId::parse)
+                    .or_else(|| {
+                        p.get("path")
+                            .and_then(Value::as_str)
+                            .and_then(|path| self.find_reader_tab_by_path(path))
+                    });
+                let closed = if let Some(id) = target {
+                    self.close_reader_tab(id, ctx)
+                } else if p.get("id").is_some() || p.get("path").is_some() {
+                    false
+                } else {
+                    self.close_reader_item(ctx)
+                };
+                if closed {
+                    control::ok(json!({"closeRequested":true,"workspace":self.active}))
+                } else {
+                    control::error("Open a file in Reader first")
+                }
+            }
             "app.media.inspect" => match &self.media {
                 Some(media) if self.active == Workspace::Reader => control::ok(media.inspect()),
                 _ => control::error("Open an audio or video file in Reader first"),
@@ -86,6 +231,7 @@ impl Polymath {
             | "app.media.next"
             | "app.media.previous"
             | "app.media.sort"
+            | "app.media.volume"
             | "app.media.fullscreen" => {
                 if self.active != Workspace::Reader {
                     control::error("Open an audio or video file in Reader first")
@@ -104,6 +250,11 @@ impl Polymath {
                             .and_then(media_view::MediaView::sort_from_label)
                             .ok_or_else(|| "by must be name, artist or album".to_owned())
                             .map(|sort| media.set_sort(sort)),
+                        "app.media.volume" => p
+                            .get("value")
+                            .and_then(Value::as_f64)
+                            .ok_or_else(|| "value must be a number from 0 to 1".to_owned())
+                            .and_then(|value| media.set_volume(value as f32)),
                         "app.media.fullscreen" => p
                             .get("enabled")
                             .and_then(Value::as_bool)
@@ -344,6 +495,15 @@ impl Polymath {
                                     control::error("Use ui.screenshot on Polymath")
                                 }
                             }
+                        }
+                    }
+                    Workspace::Video => {
+                        if matches!(req.method.as_str(), "document.inspect" | "ui.inspect") {
+                            control::ok(self.video_editor.inspect())
+                        } else {
+                            control::error(
+                                "Use the Video workspace timeline to trim, arrange and export clips",
+                            )
                         }
                     }
                 }

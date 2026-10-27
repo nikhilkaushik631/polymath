@@ -58,18 +58,19 @@ impl Polymath {
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
-            .default_size(vec2(680.0, 500.0))
-            .min_width(600.0)
+            .default_size(vec2(700.0, 520.0))
+            .min_width(650.0)
+            .max_width(760.0)
             .show(ctx, |ui| {
                 ui.visuals_mut().override_text_color =
                     Some(Color32::from_gray(if self.dark { 235 } else { 28 }));
                 ui.style_mut().spacing.button_padding = vec2(12.0, 8.0);
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
-                        ui.set_min_width(150.0);
+                        ui.set_width(158.0);
                         ui.set_min_height(430.0);
                         ui.add_space(8.0);
-                        ui.label(RichText::new("POLYMATH").size(10.5).color(muted).strong());
+                        ui.label(RichText::new("Preferences").size(11.5).color(muted));
                         ui.add_space(12.0);
                         for page in [Page::Appearance, Page::Voice, Page::Files] {
                             let icon = pdfcraft_ui_egui::icons::image(
@@ -88,8 +89,9 @@ impl Polymath {
                                         .fill(if self.settings_page == page {
                                             selected_fill
                                         } else {
-                                            ui.visuals().widgets.inactive.bg_fill
+                                            Color32::TRANSPARENT
                                         })
+                                        .corner_radius(8)
                                         .min_size(vec2(145.0, 35.0)),
                                 )
                                 .clicked()
@@ -108,7 +110,10 @@ impl Polymath {
                     });
                     ui.add(egui::Separator::default().vertical());
                     ui.vertical(|ui| {
-                        ui.set_min_width(440.0);
+                        // A bounded content column keeps ScrollArea and its cards
+                        // from growing this dialog to the whole desktop width.
+                        ui.set_width(470.0);
+                        ui.set_max_width(470.0);
                         ui.set_min_height(430.0);
                         if !self.voice.notice.is_empty() && self.settings_page != Page::Voice {
                             ui.horizontal(|ui| {
@@ -134,7 +139,7 @@ impl Polymath {
         heading(
             ui,
             "Appearance",
-            "A clear workspace in either light or dark.",
+            "Choose a theme and control interface motion.",
             muted,
         );
         ui.add_space(18.0);
@@ -142,7 +147,7 @@ impl Polymath {
             ui.label(RichText::new("Theme").size(15.0).strong());
             ui.add_space(4.0);
             ui.label(
-                RichText::new("Choose the light that is comfortable for this workspace.")
+                RichText::new("Applies to menus and tools. Document colors stay as authored.")
                     .size(12.0)
                     .color(muted),
             );

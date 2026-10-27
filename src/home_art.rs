@@ -195,6 +195,37 @@ pub fn document(p: &Painter, center: Pos2, workspace: Workspace, dark: bool) {
                 Stroke::new(1.0, gray(152)),
             );
         }
+        Workspace::Video => {
+            let stage = Rect::from_center_size(center, vec2(140.0, 82.0));
+            p.rect_filled(stage, 6, gray(if dark { 54 } else { 211 }));
+            let inner = stage.shrink(6.0);
+            p.rect_filled(inner, 4, gray(29));
+            p.add(egui::Shape::convex_polygon(
+                vec![
+                    center + vec2(-7.0, -17.0),
+                    center + vec2(18.0, -1.0),
+                    center + vec2(-7.0, 15.0),
+                ],
+                Color32::WHITE,
+                Stroke::NONE,
+            ));
+            let timeline = Rect::from_center_size(center + vec2(0.0, 56.0), vec2(140.0, 20.0));
+            p.rect_filled(timeline, 4, gray(if dark { 62 } else { 226 }));
+            for (start, width) in [(5.0, 35.0), (44.0, 50.0), (98.0, 37.0)] {
+                p.rect_filled(
+                    Rect::from_min_size(timeline.min + vec2(start, 4.0), vec2(width, 12.0)),
+                    2,
+                    Color32::from_rgb(150, 71, 64),
+                );
+            }
+            p.line_segment(
+                [
+                    timeline.min + vec2(61.0, -6.0),
+                    timeline.min + vec2(61.0, 24.0),
+                ],
+                Stroke::new(2.0, Color32::WHITE),
+            );
+        }
         Workspace::Home => {}
     }
 }

@@ -1,7 +1,10 @@
 //! cpal audio output for media playback: the device pulls mixed samples from the
 //! `deckcraft_media::Player`, which makes it the playback clock video frames follow.
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{
+    Arc, Mutex, PoisonError,
+    atomic::{AtomicU32, Ordering},
+};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use deckcraft_media::AudioOut;
@@ -25,13 +28,27 @@ fn take_stream_error(slot: &ErrorSlot) -> Option<String> {
     slot.lock().unwrap_or_else(PoisonError::into_inner).take()
 }
 
-#[derive(Default)]
 pub struct CpalOut {
     stream: Option<cpal::Stream>,
     error: ErrorSlot,
+    gain: Arc<AtomicU32>,
+}
+
+impl Default for CpalOut {
+    fn default() -> Self {
+        Self::with_gain(Arc::new(AtomicU32::new(1.0_f32.to_bits())))
+    }
 }
 
 impl CpalOut {
+    pub fn with_gain(gain: Arc<AtomicU32>) -> Self {
+        Self {
+            stream: None,
+            error: ErrorSlot::default(),
+            gain,
+        }
+    }
+
     /// Log the stream error the realtime callback kept (UI thread).
     fn report(&self) {
         if let Some(e) = take_stream_error(&self.error) {
@@ -63,21 +80,32 @@ impl AudioOut for CpalOut {
         let slot = self.error.clone();
         let err = move |e: cpal::StreamError| keep_stream_error(&slot, &e);
         let stream = match cfg.sample_format() {
-            cpal::SampleFormat::F32 => dev.build_output_stream(
-                &config,
-                move |buf: &mut [f32], _| fill(buf, channels, rate),
-                err,
-                None,
-            ),
+            cpal::SampleFormat::F32 => {
+                let gain = self.gain.clone();
+                dev.build_output_stream(
+                    &config,
+                    move |buf: &mut [f32], _| {
+                        fill(buf, channels, rate);
+                        let level = safe_gain(&gain);
+                        for sample in buf {
+                            *sample = safe_sample(*sample * level);
+                        }
+                    },
+                    err,
+                    None,
+                )
+            }
             cpal::SampleFormat::I16 => {
                 let mut tmp = Vec::new();
+                let gain = self.gain.clone();
                 dev.build_output_stream(
                     &config,
                     move |buf: &mut [i16], _| {
                         tmp.resize(buf.len(), 0.0);
                         fill(&mut tmp, channels, rate);
+                        let level = safe_gain(&gain);
                         for (o, s) in buf.iter_mut().zip(&tmp) {
-                            *o = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                            *o = (safe_sample(*s * level) * i16::MAX as f32) as i16;
                         }
                     },
                     err,
@@ -95,6 +123,23 @@ impl AudioOut for CpalOut {
     fn stop(&mut self) {
         self.stream = None;
         self.report();
+    }
+}
+
+fn safe_gain(gain: &AtomicU32) -> f32 {
+    let value = f32::from_bits(gain.load(Ordering::Relaxed));
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+fn safe_sample(sample: f32) -> f32 {
+    if sample.is_finite() {
+        sample.clamp(-1.0, 1.0)
+    } else {
+        0.0
     }
 }
 
@@ -116,6 +161,19 @@ mod tests {
         assert_eq!(take_stream_error(&slot), None);
         keep_stream_error(&slot, &"a later error");
         assert_eq!(take_stream_error(&slot).as_deref(), Some("a later error"));
+    }
+
+    #[test]
+    fn output_gain_and_samples_stay_in_audio_range() {
+        let gain = AtomicU32::new(1.5_f32.to_bits());
+        assert_eq!(safe_gain(&gain), 1.0);
+        gain.store(f32::NAN.to_bits(), Ordering::Relaxed);
+        assert_eq!(safe_gain(&gain), 0.0);
+        gain.store((-0.5_f32).to_bits(), Ordering::Relaxed);
+        assert_eq!(safe_gain(&gain), 0.0);
+        assert_eq!(safe_sample(2.0), 1.0);
+        assert_eq!(safe_sample(-2.0), -1.0);
+        assert_eq!(safe_sample(f32::INFINITY), 0.0);
     }
 
     #[test]

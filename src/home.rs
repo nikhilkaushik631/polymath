@@ -24,13 +24,20 @@ impl Polymath {
     pub(crate) fn bar(&mut self, ui: &mut egui::Ui, frame: &eframe::Frame) {
         // The toolbar button can take focus on click. Capture the editor field first.
         let focused_before_toolbar = ui.ctx().memory(|memory| memory.focused());
-        egui::Panel::top("iris-workspaces")
+        let chrome = crate::ui_kit::chrome(self.dark);
+        egui::Panel::top("polymath-workspaces")
             .exact_size(48.0)
+            .frame(
+                egui::Frame::new()
+                    .fill(chrome.surface)
+                    .stroke(Stroke::new(1.0, chrome.line))
+                    .inner_margin(egui::Margin::symmetric(8, 5)),
+            )
             .show(ui, |ui| {
                 for font in ui.style_mut().text_styles.values_mut() {
                     font.family = egui::FontFamily::Proportional;
                 }
-                let text = Color32::from_gray(if self.dark { 238 } else { 24 });
+                let text = chrome.ink;
                 ui.visuals_mut().override_text_color = Some(text);
                 ui.visuals_mut().selection.bg_fill =
                     Color32::from_gray(if self.dark { 64 } else { 220 });
@@ -39,22 +46,24 @@ impl Polymath {
                 ui.style_mut()
                     .text_styles
                     .insert(egui::TextStyle::Button, egui::FontId::proportional(13.5));
+                ui.style_mut()
+                    .text_styles
+                    .insert(egui::TextStyle::Body, egui::FontId::proportional(13.0));
+                ui.style_mut()
+                    .text_styles
+                    .insert(egui::TextStyle::Small, egui::FontId::proportional(11.0));
                 ui.horizontal_centered(|ui| {
                     ui.add_space(4.0);
                     ui.add(
                         egui::Image::new(egui::include_image!("../assets/icons/polymath.svg"))
                             .fit_to_exact_size(vec2(28.0, 28.0)),
                     );
-                    ui.label(RichText::new("Polymath").size(18.0).strong());
-                    ui.add_space(12.0);
+                    ui.label(RichText::new("Polymath").size(17.0).strong());
+                    ui.add_space(9.0);
                     ui.separator();
-                    ui.add_space(8.0);
+                    ui.add_space(5.0);
                     if self.active == Workspace::Home {
-                        ui.label(
-                            RichText::new("Workspace")
-                                .size(13.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
+                        ui.label(RichText::new("Home").size(13.0).color(chrome.muted));
                     } else {
                         let image = egui::Image::new(Workspace::Home.icon())
                             .fit_to_exact_size(vec2(16.0, 16.0))
@@ -62,20 +71,21 @@ impl Polymath {
                         if ui
                             .add(
                                 egui::Button::image_and_text(image, "Home")
-                                    .min_size(vec2(74.0, 32.0)),
+                                    .fill(Color32::TRANSPARENT)
+                                    .stroke(Stroke::NONE)
+                                    .corner_radius(8)
+                                    .min_size(vec2(74.0, 34.0)),
                             )
                             .on_hover_text("Return to your workspace · ⌘0")
                             .clicked()
                         {
                             self.next = Some(Workspace::Home);
                         }
+                        ui.label(RichText::new("/").size(13.0).color(chrome.muted));
                         let accent = self.active.accent(self.dark);
-                        let capsule = ui
-                            .visuals()
-                            .widgets
-                            .inactive
-                            .bg_fill
-                            .lerp_to_gamma(accent, if self.dark { 0.24 } else { 0.13 });
+                        let capsule = chrome
+                            .surface
+                            .lerp_to_gamma(accent, if self.dark { 0.24 } else { 0.11 });
                         egui::Frame::new()
                             .fill(capsule)
                             .corner_radius(8)
@@ -108,27 +118,27 @@ impl Polymath {
                         } else {
                             "Add to Favorites"
                         };
-                        let icon = pdfcraft_ui_egui::icons::image(
+                        if crate::theme_button::icon(
+                            ui,
                             "star",
-                            18.0,
-                            if favorite {
-                                Workspace::Reader.accent(self.dark)
-                            } else {
-                                text
-                            },
+                            label,
+                            self.dark,
+                            favorite,
+                            Workspace::Reader.accent(self.dark),
                         )
-                        .alt_text(label);
-                        if ui
-                            .add(
-                                egui::Button::image(icon)
-                                    .selected(favorite)
-                                    .min_size(vec2(34.0, 34.0)),
-                            )
-                            .on_hover_text(label)
-                            .clicked()
+                        .clicked()
                         {
                             self.reading_memory.toggle_favorite(&path);
                             self.save_preferences();
+                        }
+                    }
+                    if self.active == Workspace::Reader && self.active_reader_tab().is_some() {
+                        if ui
+                            .add(egui::Button::new("Close file").frame(false))
+                            .on_hover_text("Close this Reader tab")
+                            .clicked()
+                        {
+                            self.close_reader_item(&ui.ctx().clone());
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -136,16 +146,16 @@ impl Polymath {
                         if crate::theme_button::show(ui, self.dark).clicked() {
                             self.set_dark(!self.dark, &ctx);
                         }
-                        let settings_icon = pdfcraft_ui_egui::icons::image(
+                        if crate::theme_button::icon(
+                            ui,
                             "settings",
-                            18.0,
-                            ui.visuals().text_color(),
+                            "Settings",
+                            self.dark,
+                            self.voice.panel_open,
+                            self.active.accent(self.dark),
                         )
-                        .alt_text("Settings");
-                        if ui
-                            .add(egui::Button::image(settings_icon).min_size(vec2(34.0, 34.0)))
-                            .on_hover_text("Polymath settings · appearance, voice, folders · ⌘,")
-                            .clicked()
+                        .on_hover_text("Polymath settings · appearance, voice, folders · ⌘,")
+                        .clicked()
                         {
                             self.voice.panel_open = !self.voice.panel_open;
                         }
@@ -156,17 +166,18 @@ impl Polymath {
                         } else {
                             "Dictate into the selected text field"
                         };
-                        let mic_icon =
-                            pdfcraft_ui_egui::icons::image("mic", 18.0, ui.visuals().text_color())
-                                .alt_text(mic_label);
                         let mic = ui
-                            .add_enabled(
-                                !self.voice.transcribing(),
-                                egui::Button::image(mic_icon)
-                                    .selected(self.voice.recording())
-                                    .min_size(vec2(34.0, 34.0)),
-                            )
-                            .on_hover_text(mic_label);
+                            .add_enabled_ui(!self.voice.transcribing(), |ui| {
+                                crate::theme_button::icon(
+                                    ui,
+                                    "mic",
+                                    mic_label,
+                                    self.dark,
+                                    self.voice.recording(),
+                                    self.active.accent(self.dark),
+                                )
+                            })
+                            .inner;
                         if mic.clicked() {
                             let result = if self.voice.recording() {
                                 self.voice.stop_dictation()
@@ -182,7 +193,27 @@ impl Polymath {
                             ctx.request_repaint();
                         }
                         if self.active == Workspace::Reader {
-                            if let Some(path) = self.editable_reader_path() {
+                            if let Some(path) = self
+                                .media
+                                .as_ref()
+                                .filter(|media| {
+                                    crate::workspace::is_video_path(std::path::Path::new(
+                                        &media.path,
+                                    ))
+                                })
+                                .map(|media| media.path.clone())
+                            {
+                                if egui_shadcn::Button::new("Edit video")
+                                    .variant(egui_shadcn::ButtonVariant::Solid)
+                                    .size(egui_shadcn::ButtonSize::Sm)
+                                    .show(ui, &crate::ui_kit::theme(self.dark, Workspace::Video))
+                                    .on_hover_text("Add this video to the editing timeline")
+                                    .clicked()
+                                    && let Err(error) = self.open_for_edit(&path, &ctx)
+                                {
+                                    self.notice = Some(error);
+                                }
+                            } else if let Some(path) = self.editable_reader_path() {
                                 let editor = Workspace::for_path(std::path::Path::new(&path))
                                     .map(|workspace| workspace.label())
                                     .unwrap_or("Writer");
@@ -213,7 +244,7 @@ impl Polymath {
                             .variant(egui_shadcn::ButtonVariant::Outline)
                             .size(egui_shadcn::ButtonSize::Sm)
                             .show(ui, &crate::ui_kit::theme(self.dark, self.active))
-                            .on_hover_text("Open any supported file · ⌘O")
+                            .on_hover_text("Open any supported file in a Reader tab · ⌘O")
                             .clicked()
                         {
                             self.pick(false, frame, &ctx);
@@ -222,6 +253,14 @@ impl Polymath {
                 });
             });
         self.settings_window(&ui.ctx().clone(), frame);
+    }
+
+    pub(crate) fn close_reader_item(&mut self, ctx: &egui::Context) -> bool {
+        if self.active != Workspace::Reader {
+            return false;
+        }
+        self.active_reader_tab()
+            .is_some_and(|id| self.close_reader_tab(id, ctx))
     }
     pub(crate) fn home(&mut self, ui: &mut egui::Ui, frame: &eframe::Frame) {
         let ctx = ui.ctx().clone();

@@ -2,13 +2,16 @@
 use crate::audio::CpalOut;
 use crate::media_queue::{Kind, Queue, Sort};
 use deckcraft_media::{Bytes, ClipParams, MediaInfo, PlayState, Player, VideoFeed, VoiceSpec};
-use egui::{Color32, ColorImage, Rect, Sense, Stroke, TextureHandle, TextureOptions, pos2, vec2};
+use egui::{
+    Color32, ColorImage, Rect, Sense, Stroke, TextureHandle, TextureOptions, Vec2, pos2, vec2,
+};
 use egui_extras::{Column, TableBuilder};
 use egui_shadcn::{Button, ButtonRadius, ButtonSize, ButtonVariant};
 use std::{
     path::Path,
     sync::{
         Arc,
+        atomic::{AtomicU32, Ordering},
         mpsc::{self, Receiver},
     },
     time::Duration,
@@ -35,11 +38,14 @@ pub struct MediaView {
     pub path: String,
     state: State,
     player: Player,
+    output_gain: Arc<AtomicU32>,
     queue: Queue,
     seek_to: f64,
     auto_play_when_ready: bool,
     end_handled: bool,
     pub fullscreen: bool,
+    video_zoom: f32,
+    video_pan: Vec2,
     queue_open: bool,
     notice: Option<String>,
 }
@@ -54,21 +60,29 @@ enum Action {
     Sort(Sort),
     Select(std::path::PathBuf),
     Queue(bool),
+    Volume(f32),
+    FitVideo,
 }
 
 impl MediaView {
     pub fn open(path: &Path) -> Result<Self, String> {
         let state = Self::load_state(path)?;
+        let queue = Queue::new(path);
+        let queue_open = false;
+        let output_gain = Arc::new(AtomicU32::new(1.0_f32.to_bits()));
         Ok(Self {
             path: path.to_string_lossy().into_owned(),
             state,
-            player: Player::new(Some(Box::new(CpalOut::default()))),
-            queue: Queue::new(path),
+            player: Player::new(Some(Box::new(CpalOut::with_gain(output_gain.clone())))),
+            output_gain,
+            queue,
             seek_to: 0.0,
             auto_play_when_ready: false,
             end_handled: false,
             fullscreen: false,
-            queue_open: true,
+            video_zoom: 1.0,
+            video_pan: Vec2::ZERO,
+            queue_open,
             notice: None,
         })
     }
@@ -114,6 +128,8 @@ impl MediaView {
             "artist":item.and_then(|item| item.artist.as_deref()),
             "album":item.and_then(|item| item.album.as_deref()),
             "fullscreen":self.fullscreen,
+            "videoZoom":self.video_zoom,
+            "volume":self.volume(),
         });
         match &self.state {
             State::Loading(_) => {
@@ -170,20 +186,32 @@ impl MediaView {
     fn select(&mut self, path: std::path::PathBuf, play: bool) -> Result<(), String> {
         let state = Self::load_state(&path)?;
         self.player.stop_all();
-        self.player = Player::new(Some(Box::new(CpalOut::default())));
+        self.player = Player::new(Some(Box::new(CpalOut::with_gain(self.output_gain.clone()))));
         self.path = path.to_string_lossy().into_owned();
         self.state = state;
         self.seek_to = 0.0;
         self.auto_play_when_ready = play;
         self.end_handled = false;
+        self.video_zoom = 1.0;
+        self.video_pan = Vec2::ZERO;
         self.notice = None;
         Ok(())
     }
 
-    pub fn set_fullscreen(&mut self, ctx: &egui::Context, enabled: bool) -> Result<(), String> {
-        if enabled && self.queue.kind != Kind::Video {
-            return Err("Full screen is available for video files.".into());
+    fn volume(&self) -> f32 {
+        f32::from_bits(self.output_gain.load(Ordering::Relaxed)).clamp(0.0, 1.0)
+    }
+
+    pub fn set_volume(&mut self, volume: f32) -> Result<(), String> {
+        if !volume.is_finite() {
+            return Err("Volume must be a finite number.".into());
         }
+        self.output_gain
+            .store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+        Ok(())
+    }
+
+    pub fn set_fullscreen(&mut self, ctx: &egui::Context, enabled: bool) -> Result<(), String> {
         self.fullscreen = enabled;
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(enabled));
         Ok(())
@@ -289,20 +317,21 @@ impl MediaView {
             return;
         }
         let mut action = None;
+        let mut volume = self.volume();
         let canvas = if dark {
-            Color32::from_rgb(20, 25, 30)
+            Color32::from_rgb(22, 24, 27)
         } else {
-            Color32::from_rgb(244, 247, 249)
+            Color32::from_rgb(250, 250, 250)
         };
         let ink = if dark {
             Color32::from_rgb(241, 245, 247)
         } else {
-            Color32::from_rgb(25, 40, 48)
+            Color32::from_rgb(25, 27, 30)
         };
         let muted = if dark {
             Color32::from_rgb(178, 191, 198)
         } else {
-            Color32::from_rgb(80, 99, 110)
+            Color32::from_rgb(102, 108, 115)
         };
         let reader_blue = if dark {
             Color32::from_rgb(137, 199, 225)
@@ -333,12 +362,13 @@ impl MediaView {
             .frame(
                 egui::Frame::new()
                     .fill(canvas)
-                    .inner_margin(egui::Margin::symmetric(28, 18)),
+                    .inner_margin(egui::Margin::symmetric(22, 14)),
             )
             .show(ui, |ui| {
                 ui.visuals_mut().override_text_color = Some(ink);
                 let theme = crate::ui_kit::theme(dark, crate::Workspace::Reader);
-                if self.queue_open && ui.available_width() > 740.0 {
+                let can_show_queue = ui.available_width() > 740.0;
+                if self.queue_open && can_show_queue {
                     let queue = &self.queue;
                     let current = Path::new(&self.path);
                     egui::Panel::right("polymath-media-queue")
@@ -349,9 +379,9 @@ impl MediaView {
                         .frame(
                             egui::Frame::new()
                                 .fill(if dark {
-                                    Color32::from_rgb(26, 35, 41)
+                                    Color32::from_rgb(31, 33, 37)
                                 } else {
-                                    Color32::from_rgb(232, 240, 244)
+                                    Color32::from_rgb(242, 244, 246)
                                 })
                                 .inner_margin(egui::Margin::same(16)),
                         )
@@ -371,45 +401,100 @@ impl MediaView {
                         .color(reader_blue)
                         .strong(),
                     );
+                    let queue_open = self.queue_open;
+                    let queue_icon = move |p: &egui::Painter, center, _, color| {
+                        let direction = if queue_open { 1.0 } else { -1.0 };
+                        let tip = center + vec2(4.0 * direction, 0.0);
+                        let stroke = Stroke::new(2.0, color);
+                        p.line_segment([center + vec2(-3.0 * direction, -5.0), tip], stroke);
+                        p.line_segment([center + vec2(-3.0 * direction, 5.0), tip], stroke);
+                    };
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if Button::new(if self.queue_open {
-                            "Hide queue"
-                        } else {
-                            "Show queue"
-                        })
-                        .variant(ButtonVariant::Outline)
-                        .size(ButtonSize::Sm)
-                        .radius(ButtonRadius::Full)
-                        .show(ui, &theme)
-                        .clicked()
+                        if Button::new("")
+                            .variant(if self.queue_open {
+                                ButtonVariant::Soft
+                            } else {
+                                ButtonVariant::Ghost
+                            })
+                            .size(ButtonSize::IconSm)
+                            .radius(ButtonRadius::Medium)
+                            .icon(&queue_icon)
+                            .show(ui, &theme)
+                            .on_hover_text(if self.queue_open {
+                                "Hide Up Next playlist"
+                            } else {
+                                "Show Up Next playlist"
+                            })
+                            .clicked()
                         {
                             action = Some(Action::Queue(!self.queue_open));
                         }
+                        ui.add_space(8.0);
+                        if Button::new("Full screen")
+                            .variant(ButtonVariant::Outline)
+                            .size(ButtonSize::Sm)
+                            .radius(ButtonRadius::Medium)
+                            .show(ui, &theme)
+                            .on_hover_text(if self.queue.kind == Kind::Video {
+                                "Play video full screen · double-click video"
+                            } else {
+                                "Open music full screen"
+                            })
+                            .clicked()
+                        {
+                            action = Some(Action::Fullscreen(true));
+                        }
+                        if self.queue.kind == Kind::Video {
+                            ui.add_space(8.0);
+                            if Button::new(if self.video_zoom > 1.01 {
+                                "Fit video"
+                            } else {
+                                "Fit"
+                            })
+                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Sm)
+                            .radius(ButtonRadius::Medium)
+                            .show(ui, &theme)
+                            .on_hover_text("Reset video zoom after pinching")
+                            .clicked()
+                            {
+                                action = Some(Action::FitVideo);
+                            }
+                        }
                     });
                 });
-                // Keep the transport visible with the video at ordinary window heights.
+                // Reserve the seek, transport, volume and details rows at the
+                // host's 125% UI scale while giving video the remaining room.
                 // ScrollArea's inner Ui can report an unbounded height, so measure here.
-                let video_height_budget = (ui.available_height() - 310.0).max(230.0);
+                let stage_height_budget = (ui.available_height() - 300.0).max(230.0);
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.add_space(22.0);
+                    ui.add_space(8.0);
                     ui.vertical_centered(|ui| {
-                        let width = ui.available_width().min(1060.0).max(280.0);
+                        let width = if self.queue.kind == Kind::Video {
+                            ui.available_width().max(280.0)
+                        } else {
+                            ui.available_width().min(1060.0).max(280.0)
+                        };
                         let (header, response) =
-                            ui.allocate_exact_size(vec2(width, 84.0), Sense::hover());
+                            ui.allocate_exact_size(vec2(width, 57.0), Sense::hover());
                         response.on_hover_text(&self.path);
                         let painter = ui.painter().clone();
                         painter.text(
                             header.left_top(),
                             egui::Align2::LEFT_TOP,
-                            "Now playing",
-                            egui::FontId::proportional(13.0),
+                            "NOW PLAYING",
+                            egui::FontId::proportional(11.0),
                             reader_blue,
                         );
                         painter.text(
-                            header.left_top() + vec2(0.0, 24.0),
+                            header.left_top() + vec2(0.0, 18.0),
                             egui::Align2::LEFT_TOP,
                             shorten(&filename, ((width - 30.0) / 26.0) as usize),
-                            egui::FontId::proportional(28.0),
+                            egui::FontId::proportional(if self.queue.kind == Kind::Video {
+                                21.0
+                            } else {
+                                25.0
+                            }),
                             ink,
                         );
                         match &mut self.state {
@@ -468,29 +553,60 @@ impl MediaView {
                                     .filter(|v| v.width > 0 && v.height > 0)
                                     .map_or(16.0 / 9.0, |v| v.width as f32 / v.height as f32);
                                 let height = if video {
-                                    (width / aspect)
-                                        .clamp(230.0, 560.0)
-                                        .min(video_height_budget)
+                                    (width / aspect).max(230.0).min(stage_height_budget)
                                 } else if width < 620.0 {
-                                    330.0
+                                    280.0_f32.min(stage_height_budget)
                                 } else {
-                                    268.0
+                                    300.0_f32.min(stage_height_budget)
                                 };
-                                let (stage, stage_response) =
-                                    ui.allocate_exact_size(vec2(width, height), Sense::click());
-                                let stage_response = stage_response.on_hover_text(if playing {
+                                let (stage, stage_response) = ui.allocate_exact_size(
+                                    vec2(width, height),
+                                    Sense::click_and_drag(),
+                                );
+                                let stage_response = stage_response.on_hover_text(if video {
+                                    "Pinch to zoom · Drag to pan · Double-click for full screen"
+                                } else if playing {
                                     "Pause · Space"
                                 } else {
                                     "Play · Space"
                                 });
-                                if stage_response.clicked() {
+                                if video && stage_response.double_clicked() {
+                                    action = Some(Action::Fullscreen(true));
+                                } else if stage_response.clicked() {
                                     action =
                                         Some(if playing { Action::Pause } else { Action::Play });
+                                }
+                                if video {
+                                    let (pinch, pointer) = ui.input(|input| {
+                                        (input.zoom_delta(), input.pointer.hover_pos())
+                                    });
+                                    if let Some(pointer) =
+                                        pointer.filter(|point| stage.contains(*point))
+                                        && (pinch - 1.0).abs() > 0.001
+                                    {
+                                        apply_anchored_zoom(
+                                            &mut self.video_zoom,
+                                            &mut self.video_pan,
+                                            stage,
+                                            pointer,
+                                            pinch,
+                                        );
+                                    }
+                                    if stage_response.dragged() && self.video_zoom > 1.0 {
+                                        self.video_pan += stage_response.drag_delta();
+                                    }
                                 }
                                 let painter = ui.painter().clone();
                                 painter.rect_filled(stage, 14.0, Color32::from_rgb(15, 28, 37));
                                 if video {
-                                    render_video_frame(loaded, ui, stage, position);
+                                    render_video_frame(
+                                        loaded,
+                                        ui,
+                                        stage,
+                                        position,
+                                        self.video_zoom,
+                                        &mut self.video_pan,
+                                    );
                                     if !playing {
                                         let center = stage.center();
                                         painter.circle_filled(
@@ -576,6 +692,28 @@ impl MediaView {
                                     vec2(width, 64.0),
                                     egui::Layout::left_to_right(egui::Align::Center),
                                     |ui| {
+                                        ui.add_space(((width - 290.0) * 0.5).max(0.0));
+                                        if Button::new("")
+                                            .variant(ButtonVariant::Ghost)
+                                            .size(ButtonSize::IconLg)
+                                            .radius(ButtonRadius::Full)
+                                            .icon(&previous_icon)
+                                            .show(ui, &theme)
+                                            .on_hover_text("Previous file")
+                                            .clicked()
+                                        {
+                                            action = Some(Action::Previous);
+                                        }
+                                        if Button::new("−30 s")
+                                            .variant(ButtonVariant::Ghost)
+                                            .size(ButtonSize::Sm)
+                                            .radius(ButtonRadius::Medium)
+                                            .show(ui, &theme)
+                                            .on_hover_text("Back 30 seconds")
+                                            .clicked()
+                                        {
+                                            action = Some(Action::Seek((position - 30.0).max(0.0)));
+                                        }
                                         if Button::new("")
                                             .variant(ButtonVariant::Solid)
                                             .size(ButtonSize::IconLg)
@@ -596,16 +734,16 @@ impl MediaView {
                                                 Action::Play
                                             });
                                         }
-                                        if Button::new("")
+                                        if Button::new("+30 s")
                                             .variant(ButtonVariant::Ghost)
-                                            .size(ButtonSize::IconLg)
-                                            .radius(ButtonRadius::Full)
-                                            .icon(&previous_icon)
+                                            .size(ButtonSize::Sm)
+                                            .radius(ButtonRadius::Medium)
                                             .show(ui, &theme)
-                                            .on_hover_text("Previous file")
+                                            .on_hover_text("Forward 30 seconds")
                                             .clicked()
                                         {
-                                            action = Some(Action::Previous);
+                                            action =
+                                                Some(Action::Seek((position + 30.0).min(duration)));
                                         }
                                         if Button::new("")
                                             .variant(ButtonVariant::Ghost)
@@ -618,18 +756,48 @@ impl MediaView {
                                         {
                                             action = Some(Action::Next);
                                         }
+                                    },
+                                );
+                                ui.allocate_ui_with_layout(
+                                    vec2(width, 30.0),
+                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    |ui| {
+                                        ui.label(
+                                            egui::RichText::new(format!(
+                                                "{}  /  {}",
+                                                timestamp(position),
+                                                timestamp(duration)
+                                            ))
+                                            .font(egui::FontId::monospace(12.0))
+                                            .color(muted),
+                                        );
                                         ui.with_layout(
                                             egui::Layout::right_to_left(egui::Align::Center),
                                             |ui| {
-                                                ui.add_space(12.0);
                                                 ui.label(
                                                     egui::RichText::new(format!(
-                                                        "{}  /  {}",
-                                                        timestamp(position),
-                                                        timestamp(duration)
+                                                        "{}%",
+                                                        (volume * 100.0).round() as u32
                                                     ))
-                                                    .font(egui::FontId::monospace(14.0))
-                                                    .color(ink),
+                                                    .size(11.0)
+                                                    .color(muted),
+                                                );
+                                                if ui
+                                                    .add_sized(
+                                                        [110.0, 20.0],
+                                                        egui::Slider::new(&mut volume, 0.0..=1.0)
+                                                            .show_value(false),
+                                                    )
+                                                    .on_hover_text("Volume")
+                                                    .changed()
+                                                {
+                                                    action = Some(Action::Volume(volume));
+                                                }
+                                                ui.label(
+                                                    egui::RichText::new("VOL")
+                                                        .size(10.0)
+                                                        .strong()
+                                                        .color(muted),
                                                 );
                                             },
                                         );
@@ -678,16 +846,6 @@ impl MediaView {
                                         muted,
                                     );
                                 }
-                                if video
-                                    && Button::new("Full screen")
-                                        .variant(ButtonVariant::Outline)
-                                        .size(ButtonSize::Sm)
-                                        .radius(ButtonRadius::Full)
-                                        .show(ui, &theme)
-                                        .clicked()
-                                {
-                                    action = Some(Action::Fullscreen(true));
-                                }
                                 if let Some(notice) = &self.notice {
                                     ui.colored_label(error_ink, notice);
                                 }
@@ -711,6 +869,16 @@ impl MediaView {
                             }
                         }
                     });
+                    if self.queue_open && !can_show_queue {
+                        ui.add_space(18.0);
+                        ui.allocate_ui(vec2(ui.available_width(), 360.0), |ui| {
+                            if let Some(chosen) =
+                                show_queue(ui, &self.queue, Path::new(&self.path), dark)
+                            {
+                                action = Some(chosen);
+                            }
+                        });
+                    }
                 });
             });
         if let Some(action) = action {
@@ -720,6 +888,21 @@ impl MediaView {
 
     fn show_fullscreen(&mut self, ui: &mut egui::Ui) {
         let theme = crate::ui_kit::theme(true, crate::Workspace::Reader);
+        let mut volume = self.volume();
+        let kind = self.queue.kind;
+        let filename = Path::new(&self.path)
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("Media")
+            .to_owned();
+        let current = self.queue.current(Path::new(&self.path));
+        let title = current.map_or(filename, |item| item.title.clone());
+        let credit = current.map_or(String::new(), |item| match (&item.artist, &item.album) {
+            (Some(artist), Some(album)) => format!("{artist}  ·  {album}"),
+            (Some(artist), None) => artist.clone(),
+            (None, Some(album)) => album.clone(),
+            _ => String::new(),
+        });
         let status = self.player.status(VOICE);
         let playing = status
             .as_ref()
@@ -756,16 +939,66 @@ impl MediaView {
             .show(ui, |ui| {
                 ui.visuals_mut().override_text_color = Some(Color32::WHITE);
                 let width = ui.available_width().max(320.0);
-                let height = (ui.available_height() - 105.0).max(220.0);
-                let (stage, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
+                let height = (ui.available_height() - 130.0).max(220.0);
+                let (stage, response) =
+                    ui.allocate_exact_size(vec2(width, height), Sense::click_and_drag());
+                let response = response.on_hover_text(if kind == Kind::Video {
+                    "Pinch to zoom · Drag to pan · Click to play or pause"
+                } else {
+                    "Click to play or pause"
+                });
                 if response.clicked() {
                     action = Some(if playing { Action::Pause } else { Action::Play });
                 }
-                ui.painter().rect_filled(stage, 0.0, Color32::BLACK);
+                if kind == Kind::Video {
+                    let (pinch, pointer) =
+                        ui.input(|input| (input.zoom_delta(), input.pointer.hover_pos()));
+                    if let Some(pointer) = pointer.filter(|point| stage.contains(*point))
+                        && (pinch - 1.0).abs() > 0.001
+                    {
+                        apply_anchored_zoom(
+                            &mut self.video_zoom,
+                            &mut self.video_pan,
+                            stage,
+                            pointer,
+                            pinch,
+                        );
+                    }
+                    if response.dragged() && self.video_zoom > 1.0 {
+                        self.video_pan += response.drag_delta();
+                    }
+                }
+                ui.painter().rect_filled(
+                    stage,
+                    0.0,
+                    if kind == Kind::Video {
+                        Color32::BLACK
+                    } else {
+                        Color32::from_rgb(12, 27, 36)
+                    },
+                );
                 match &mut self.state {
                     State::Ready(loaded) => {
-                        render_video_frame(loaded, ui, stage, position);
-                        if !playing {
+                        if kind == Kind::Video {
+                            render_video_frame(
+                                loaded,
+                                ui,
+                                stage,
+                                position,
+                                self.video_zoom,
+                                &mut self.video_pan,
+                            );
+                        } else {
+                            paint_audio_art(
+                                ui.painter(),
+                                stage,
+                                &title,
+                                &credit,
+                                &loaded.info,
+                                false,
+                            );
+                        }
+                        if !playing && kind == Kind::Video {
                             ui.painter().circle_filled(
                                 stage.center(),
                                 38.0,
@@ -778,7 +1011,11 @@ impl MediaView {
                         ui.painter().text(
                             stage.center(),
                             egui::Align2::CENTER_CENTER,
-                            "Opening video…",
+                            if kind == Kind::Video {
+                                "Opening video…"
+                            } else {
+                                "Opening music…"
+                            },
                             egui::FontId::proportional(18.0),
                             Color32::WHITE,
                         );
@@ -820,14 +1057,16 @@ impl MediaView {
                     let ratio = ((pointer.x - track.left()) / track.width()).clamp(0.0, 1.0);
                     action = Some(Action::Seek(ratio as f64 * duration));
                 }
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.add_space(16.0);
                     for (label, desired) in [
                         ("Previous", Action::Previous),
+                        ("−30 s", Action::Seek((position - 30.0).max(0.0))),
                         (
                             if playing { "Pause" } else { "Play" },
                             if playing { Action::Pause } else { Action::Play },
                         ),
+                        ("+30 s", Action::Seek((position + 30.0).min(duration))),
                         ("Next", Action::Next),
                     ] {
                         let button = Button::new(label)
@@ -857,6 +1096,41 @@ impl MediaView {
                         .monospace()
                         .color(Color32::from_rgb(210, 220, 225)),
                     );
+                    if kind == Kind::Video {
+                        ui.add_space(10.0);
+                        if Button::new("Fit")
+                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Sm)
+                            .radius(ButtonRadius::Medium)
+                            .show(ui, &theme)
+                            .on_hover_text("Reset video zoom")
+                            .clicked()
+                        {
+                            action = Some(Action::FitVideo);
+                        }
+                    }
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new("VOL")
+                            .size(10.0)
+                            .strong()
+                            .color(Color32::from_rgb(174, 190, 198)),
+                    );
+                    if ui
+                        .add_sized(
+                            [95.0, 20.0],
+                            egui::Slider::new(&mut volume, 0.0..=1.0).show_value(false),
+                        )
+                        .on_hover_text("Volume")
+                        .changed()
+                    {
+                        action = Some(Action::Volume(volume));
+                    }
+                    ui.label(
+                        egui::RichText::new(format!("{}%", (volume * 100.0).round() as u32))
+                            .size(11.0)
+                            .color(Color32::from_rgb(174, 190, 198)),
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add_space(16.0);
                         if Button::new("Exit full screen")
@@ -868,16 +1142,6 @@ impl MediaView {
                         {
                             action = Some(Action::Fullscreen(false));
                         }
-                        ui.label(
-                            egui::RichText::new(shorten(
-                                Path::new(&self.path)
-                                    .file_name()
-                                    .and_then(|value| value.to_str())
-                                    .unwrap_or("Video"),
-                                45,
-                            ))
-                            .color(Color32::from_rgb(174, 190, 198)),
-                        );
                     });
                 });
             });
@@ -906,13 +1170,40 @@ impl MediaView {
                 self.queue_open = open;
                 Ok(())
             }
+            Action::Volume(volume) => self.set_volume(volume),
+            Action::FitVideo => {
+                self.video_zoom = 1.0;
+                self.video_pan = Vec2::ZERO;
+                Ok(())
+            }
         };
         self.notice = result.err();
         ctx.request_repaint();
     }
 }
 
-fn render_video_frame(loaded: &mut Loaded, ui: &egui::Ui, stage: Rect, position: f64) {
+fn apply_anchored_zoom(
+    zoom: &mut f32,
+    pan: &mut Vec2,
+    stage: Rect,
+    pointer: egui::Pos2,
+    delta: f32,
+) {
+    let next = (*zoom * delta).clamp(1.0, 5.0);
+    let scale = next / *zoom;
+    let anchor = pointer - stage.center();
+    *pan = anchor - (anchor - *pan) * scale;
+    *zoom = next;
+}
+
+fn render_video_frame(
+    loaded: &mut Loaded,
+    ui: &egui::Ui,
+    stage: Rect,
+    position: f64,
+    zoom: f32,
+    pan: &mut Vec2,
+) {
     if let Some(feed) = &mut loaded.feed
         && let Some(frame) = feed.frame_at(position)
         && loaded.frame_time != Some(frame.time)
@@ -936,8 +1227,15 @@ fn render_video_frame(loaded: &mut Loaded, ui: &egui::Ui, stage: Rect, position:
         let size = texture.size_vec2();
         if size.x > 0.0 && size.y > 0.0 {
             let scale = (stage.width() / size.x).min(stage.height() / size.y);
-            let fitted = Rect::from_center_size(stage.center(), size * scale);
-            ui.painter().image(
+            let display = size * scale * zoom;
+            let limit = vec2(
+                ((display.x - stage.width()) * 0.5).max(0.0),
+                ((display.y - stage.height()) * 0.5).max(0.0),
+            );
+            pan.x = pan.x.clamp(-limit.x, limit.x);
+            pan.y = pan.y.clamp(-limit.y, limit.y);
+            let fitted = Rect::from_center_size(stage.center() + *pan, display);
+            ui.painter().with_clip_rect(stage).image(
                 texture.id(),
                 fitted,
                 Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
@@ -1166,16 +1464,33 @@ fn paint_audio_art(
     info: &MediaInfo,
     compact: bool,
 ) {
-    let art_size = if compact { 168.0 } else { 216.0 };
-    let art = Rect::from_min_size(
-        if compact {
-            pos2(stage.center().x - art_size * 0.5, stage.top() + 18.0)
-        } else {
-            stage.left_top() + vec2(26.0, 26.0)
-        },
+    let painter = painter.with_clip_rect(stage);
+    let immersive = stage.height() > 520.0;
+    let art_size = if immersive {
+        300.0
+    } else {
+        let text_height = if compact { 74.0 } else { 95.0 };
+        (stage.height() - text_height - 28.0).clamp(120.0, if compact { 174.0 } else { 244.0 })
+    };
+    let text_height = if compact { 74.0 } else { 95.0 };
+    let art_top = stage.top() + ((stage.height() - art_size - text_height) * 0.5).max(10.0);
+    let art = Rect::from_center_size(
+        pos2(
+            stage.center().x,
+            if immersive {
+                stage.center().y - 55.0
+            } else {
+                art_top + art_size * 0.5
+            },
+        ),
         vec2(art_size, art_size),
     );
-    painter.rect_filled(art, 11.0, Color32::from_rgb(25, 91, 118));
+    painter.rect_filled(
+        art.translate(vec2(0.0, 8.0)),
+        14.0,
+        Color32::from_rgb(8, 16, 22),
+    );
+    painter.rect_filled(art, 14.0, Color32::from_rgb(25, 91, 118));
     let center = art.center();
     painter.circle_filled(center, art_size * 0.39, Color32::from_rgb(11, 37, 52));
     for radius in [0.27, 0.31, 0.35] {
@@ -1187,42 +1502,35 @@ fn paint_audio_art(
     }
     painter.circle_filled(center, art_size * 0.105, Color32::from_rgb(235, 101, 72));
     painter.circle_filled(center, art_size * 0.022, Color32::from_rgb(18, 40, 51));
-    let text_left = if compact {
-        stage.left() + 24.0
-    } else {
-        art.right() + 34.0
-    };
-    let text_top = if compact {
-        art.bottom() + 17.0
-    } else {
-        stage.top() + 63.0
-    };
+    let text_top = art.bottom() + if immersive { 23.0 } else { 12.0 };
     painter.text(
-        pos2(text_left, text_top),
-        egui::Align2::LEFT_TOP,
+        pos2(stage.center().x, text_top),
+        egui::Align2::CENTER_TOP,
         "LOCAL MUSIC",
-        egui::FontId::proportional(14.0),
+        egui::FontId::proportional(11.0),
         Color32::from_rgb(138, 205, 222),
     );
-    let remaining = if compact {
-        stage.width() - 48.0
-    } else {
-        stage.right() - text_left - 24.0
-    };
+    let remaining = stage.width() - 48.0;
     painter.text(
-        pos2(text_left, text_top + 31.0),
-        egui::Align2::LEFT_TOP,
+        pos2(
+            stage.center().x,
+            text_top + if immersive { 23.0 } else { 18.0 },
+        ),
+        egui::Align2::CENTER_TOP,
         shorten(
             title,
-            (remaining / if compact { 20.0 } else { 26.0 }) as usize,
+            (remaining / if compact { 16.0 } else { 20.0 }) as usize,
         ),
-        egui::FontId::proportional(if compact { 20.0 } else { 26.0 }),
+        egui::FontId::proportional(if compact { 19.0 } else { 24.0 }),
         Color32::WHITE,
     );
     if !credit.is_empty() {
         painter.text(
-            pos2(text_left, text_top + 75.0),
-            egui::Align2::LEFT_TOP,
+            pos2(
+                stage.center().x,
+                text_top + if immersive { 58.0 } else { 48.0 },
+            ),
+            egui::Align2::CENTER_TOP,
             shorten(credit, (remaining / 11.0) as usize),
             egui::FontId::proportional(13.0),
             Color32::from_rgb(181, 204, 214),
@@ -1235,10 +1543,17 @@ fn paint_audio_art(
             .map_or(info.container, |a| a.codec.as_str());
         painter.text(
             pos2(
-                text_left,
-                text_top + if credit.is_empty() { 75.0 } else { 101.0 },
+                stage.center().x,
+                text_top
+                    + if immersive {
+                        if credit.is_empty() { 60.0 } else { 82.0 }
+                    } else if credit.is_empty() {
+                        50.0
+                    } else {
+                        70.0
+                    },
             ),
-            egui::Align2::LEFT_TOP,
+            egui::Align2::CENTER_TOP,
             format!("{}  ·  {}", codec, timestamp(info.duration())),
             egui::FontId::proportional(12.0),
             Color32::from_rgb(139, 173, 188),

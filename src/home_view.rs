@@ -616,6 +616,7 @@ fn launchpad(ui: &mut egui::Ui, p: Palette, reduce_motion: bool, action: &mut Op
         (Workspace::Sheets, "Sheets", "Data and tables"),
         (Workspace::Slides, "Slides", "Presentations"),
         (Workspace::Images, "Images", "Photos and graphics"),
+        (Workspace::Video, "Video", "Trim, arrange and export"),
     ];
     // Give each editor enough room to show the work it creates. Four identical
     // icon tiles flatten the hierarchy and leave no space for a useful preview.
@@ -633,7 +634,7 @@ fn launchpad(ui: &mut egui::Ui, p: Palette, reduce_motion: bool, action: &mut Op
                         label,
                         detail,
                     },
-                    card_width,
+                    if row.len() == 1 { width } else { card_width },
                     action,
                 );
             }
@@ -780,6 +781,7 @@ fn workspace_compact(
         Workspace::Sheets => Color32::from_rgb(49, 115, 82),
         Workspace::Slides => Color32::from_rgb(159, 93, 71),
         Workspace::Images => Color32::from_rgb(131, 104, 57),
+        Workspace::Video => Color32::from_rgb(151, 70, 64),
         _ => p.accent,
     };
     let tone = workspace.accent(p.dark);

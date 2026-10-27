@@ -2,6 +2,7 @@
 """Native integration check: synthetic files only, one Polymath process and window."""
 from pathlib import Path
 import hashlib,importlib.util,json,os,shutil,socket,stat,subprocess,time
+from images_smoke import fixture as image_fixture
 ROOT=Path(__file__).resolve().parent.parent
 spec=importlib.util.spec_from_file_location('bridge',ROOT/'packaging/agent_bridge.py');bridge=importlib.util.module_from_spec(spec);spec.loader.exec_module(bridge)
 out=ROOT/'target/native-qa';out.mkdir(parents=True,exist_ok=True)
@@ -18,8 +19,12 @@ def execute(workspace,command,params=None):return call('engine.execute',{'worksp
 def inspect(workspace):return call('document.inspect',{'workspace':workspace})
 def shot(name):
  if os.environ.get('POLYMATH_SKIP_SCREENSHOTS')=='1':return None
- subprocess.run(['swift','-e',f'import AppKit; NSRunningApplication(processIdentifier: {process.pid})?.activate(options: [])'],capture_output=True,timeout=15)
- time.sleep(.7);return call('ui.screenshot',{'path':str(out/(name+'.png'))})
+ for attempt in range(2):
+  subprocess.run(['swift','-e',f'import AppKit; NSRunningApplication(processIdentifier: {process.pid})?.activate(options: [])'],capture_output=True,timeout=15)
+  time.sleep(.7)
+  try:return call('ui.screenshot',{'path':str(out/(name+'.png'))})
+  except RuntimeError as error:
+   if attempt or 'Screenshot timed out' not in str(error):raise
 try:
  deadline=time.monotonic()+60
  while not endpoint.exists():
@@ -40,23 +45,92 @@ try:
  call('app.theme',{'dark':True});call('app.settings',{'page':'appearance'});shot('settings-appearance-dark')
  assert call('app.settings',{'visible':False})['visible'] is False
  shot('home-dark');call('app.theme',{'dark':False})
+ assert call('app.workspace',{'workspace':'reader'})['workspace']=='reader'
+ shot('reader-empty-light')
+ assert call('app.workspace',{'workspace':'images'})['workspace']=='images'
+ shot('images-library-light')
+ assert call('app.workspace',{'workspace':'video'})['workspace']=='video'
+ assert call('app.video.inspect')['clipCount']==0
+ shot('video-studio-empty-light')
+ call('app.workspace',{'workspace':'home'})
+ image=out/'visual-audit-image.png';image_fixture(image)
+ assert call('app.open',{'path':str(image)})['workspace']=='reader'
+ deadline=time.monotonic()+20
+ while call('document.inspect',{'workspace':'reader'}).get('state')=='loading':
+  if time.monotonic()>deadline:raise RuntimeError('Image preview did not load')
+  time.sleep(.2)
+ assert call('document.inspect',{'workspace':'reader'})['state']=='ready'
+ shot('image-viewer-light')
+ assert call('app.image.fullscreen',{'enabled':True})['fullscreen'] is True
+ time.sleep(1.5);shot('image-fullscreen')
+ assert call('app.image.fullscreen',{'enabled':False})['fullscreen'] is False
+ call('app.theme',{'dark':True});shot('image-viewer-dark');call('app.theme',{'dark':False})
+ call('app.workspace',{'workspace':'home'})
+ if shutil.which('ffmpeg'):
+  video=out/'visual-audit-video.mp4';audio=out/'visual-audit-audio.wav'
+  subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=640x360:rate=24','-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-t','4','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-shortest',str(video)],check=True,timeout=45)
+  subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-t','4','-c:a','pcm_s16le',str(audio)],check=True,timeout=20)
+  for path,name in ((video,'video'),(audio,'audio')):
+   assert call('app.open',{'path':str(path)})['workspace']=='reader'
+   deadline=time.monotonic()+20
+   while call('app.media.inspect')['state']=='loading':
+    if time.monotonic()>deadline:raise RuntimeError(f'{name} did not load')
+    time.sleep(.2)
+   assert abs(call('app.media.volume',{'value':0.35})['queue']['volume']-0.35)<0.01
+   assert abs(call('app.media.volume',{'value':1.0})['queue']['volume']-1.0)<0.01
+   shot(name+'-viewer-light')
+   call('app.theme',{'dark':True});shot(name+'-viewer-dark');call('app.theme',{'dark':False})
+   assert call('app.media.fullscreen',{'enabled':True})['queue']['fullscreen'] is True
+   time.sleep(1.5);shot(name+'-fullscreen')
+   assert call('app.media.fullscreen',{'enabled':False})['queue']['fullscreen'] is False
+  call('app.workspace',{'workspace':'home'})
+ svg=out/'visual-audit-diagram.svg'
+ svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="420" height="260" viewBox="0 0 420 260"><rect width="420" height="260" fill="#eef4f7"/><circle cx="118" cy="130" r="72" fill="#347d9c"/><path d="M118 130L252 78L324 182Z" fill="#e89a76"/></svg>',encoding='utf-8')
+ assert call('app.open',{'path':str(svg)})['workspace']=='reader'
+ assert '<svg' in call('document.inspect',{'workspace':'reader'})['text']
+ shot('svg-code-preview-light')
+ call('app.theme',{'dark':True});shot('svg-code-preview-dark');call('app.theme',{'dark':False})
+ call('app.workspace',{'workspace':'home'})
+ jsx=out/'visual-audit-component.jsx'
+ jsx.write_text('import { motion } from "framer-motion";\nexport default function Slide() {\n'+'\n'.join(f'  const row{i} = <div data-row="{i}">Row {i}</div>;' for i in range(1,72))+'\n}\n',encoding='utf-8')
+ assert call('app.open',{'path':str(jsx)})['workspace']=='reader'
+ assert inspect('reader')['lines']==75
+ tabs=call('app.reader.tabs')['tabs']
+ assert {str(svg),str(jsx)}.issubset({tab['path'] for tab in tabs}),tabs
+ assert call('app.reader.select',{'path':str(svg)})['active']
+ assert '<svg' in inspect('reader')['text']
+ assert call('app.reader.select',{'path':str(jsx)})['active']
+ assert inspect('reader')['path']==str(jsx)
+ assert call('app.reader.close',{'path':str(svg)})['closeRequested'] is True
+ assert str(svg) not in {tab['path'] for tab in call('app.reader.tabs')['tabs']}
+ shot('source-long-jsx-light')
+ call('app.theme',{'dark':True});shot('source-long-jsx-dark');call('app.theme',{'dark':False})
+ assert call('app.reader.close')['closeRequested'] is True
  markdown=out/'notes.md';markdown.write_text('# Polymath Markdown check\n\nA **bold** idea and a [local link](#details).\n\n- First item\n- Second item\n',encoding='utf-8')
  csv=out/'table.csv';csv.write_text('Place,Amount\n"North, office",42\nSouth,17\n',encoding='utf-8')
  assert call('app.open',{'path':str(markdown)})['workspace']=='reader'
  assert inspect('reader')['kind']=='source'
  assert call('app.open',{'path':str(markdown),'edit':True})['workspace']=='writer'
  assert 'Polymath Markdown check' in json.dumps(inspect('writer'))
- assert call('app.open',{'path':str(csv)})['workspace']=='sheets'
+ assert call('app.open',{'path':str(csv)})['workspace']=='reader'
+ assert inspect('reader')['kind']=='source'
+ shot('csv-table-light')
+ wide=out/'wide-table.csv'
+ wide.write_text('id,cameraId,locationId,timestamp,licensePlate,vehicleType,make,model,color,direction\n'+'\n'.join(f'{index:08d},160466e5c2a44f2,{index:04d},2026-10-28T01:44:49Z,KA18EB42,Two Wheeler,Example,Commuter,silver,north' for index in range(40))+'\n',encoding='utf-8')
+ assert call('app.open',{'path':str(wide)})['workspace']=='reader'
+ assert inspect('reader')['kind']=='source'
+ shot('csv-wide-table-light')
+ assert call('app.open',{'path':str(csv),'edit':True})['workspace']=='sheets'
  assert execute('sheets','cell.get',{'cell':'A2'})['value']=='North, office'
  assert execute('sheets','cell.get',{'cell':'B2'})['value']==42
  print('PASS: Markdown content and quoted/numeric CSV cells.',flush=True)
 
  for ext in ('xltx','xltm'):
   template=out/f'template.{ext}';shutil.copyfile(fixtures['sheets'],template)
-  assert call('app.open',{'path':str(template)})['workspace']=='sheets'
-  assert inspect('sheets')
-  assert call('app.preview',{'path':str(template)})['readOnly'] is True
+  assert call('app.open',{'path':str(template)})['workspace']=='reader'
   assert inspect('reader')['kind']=='officePreview'
+  assert call('app.open',{'path':str(template),'edit':True})['workspace']=='sheets'
+  assert inspect('sheets')
  print('PASS: Excel templates open in Sheets and preview in Reader.',flush=True)
 
  for name,content in [('example.py','def hello():\n    return "नमस्ते"\n'),('component.tsx','export const Card = () => <article>Hello</article>;\n'),('index.html','<!doctype html><title>Polymath</title>\n'),('configuration.toml','[reader]\nlocal = true\n'),('unknown.custom','Plain text still opens in Reader.\n')]:
@@ -92,7 +166,9 @@ try:
 
  states={}
  for workspace,path in fixtures.items():
-  result=call('app.open',{'path':str(path)});assert result['workspace']==workspace,result
+  result=call('app.open',{'path':str(path)});assert result['workspace']=='reader',result
+  if workspace!='reader':
+   result=call('app.open',{'path':str(path),'edit':True});assert result['workspace']==workspace,result
   time.sleep(1)
   states[workspace]=inspect(workspace)
   assert states[workspace],states
@@ -100,6 +176,7 @@ try:
   call('app.theme',{'dark':True});shot(workspace+'-dark');call('app.theme',{'dark':False})
   print('Opened and inspected:',workspace,flush=True)
  original_pdf_hash=hashlib.sha256(fixtures['reader'].read_bytes()).hexdigest()
+ assert call('app.reader.select',{'path':str(fixtures['reader'])})['active']
  execute('reader','page.rotate')
  execute('writer','file.autosave',{'value':False})
  execute('writer','text.insert',{'text':'Polymath unified workspace verification. '})
@@ -124,7 +201,7 @@ try:
  saved_pdf=out/'saved-reader.pdf';shutil.copyfile(fixtures['reader'],saved_pdf);call('app.open',{'path':str(saved_pdf)});time.sleep(.5);assert inspect('reader')
  for workspace,ext in [('writer','docx'),('sheets','xlsx'),('slides','pptx')]:
   saved=out/f'saved-{workspace}.{ext}';execute(workspace,'file.saveAs',{'path':str(saved)});assert saved.is_file() and saved.stat().st_size>0
-  call('app.open',{'path':str(saved)});assert inspect(workspace)
+  call('app.open',{'path':str(saved),'edit':True});assert inspect(workspace)
  assert 'Polymath unified workspace verification' in json.dumps(inspect('writer'))
  assert execute('sheets','cell.get',{'cell':'A9'})['value']==43
  call('app.workspace',{'workspace':'home'});shot('home-recent')

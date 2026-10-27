@@ -12,9 +12,10 @@ pub enum Workspace {
     Sheets,
     Slides,
     Images,
+    Video,
 }
 impl Workspace {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Home,
         Self::Reader,
         Self::Tools,
@@ -22,6 +23,7 @@ impl Workspace {
         Self::Sheets,
         Self::Slides,
         Self::Images,
+        Self::Video,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -32,6 +34,7 @@ impl Workspace {
             Self::Sheets => "Sheets",
             Self::Slides => "Slides",
             Self::Images => "Images",
+            Self::Video => "Video",
         }
     }
     pub fn accent(self, dark: bool) -> egui::Color32 {
@@ -42,6 +45,7 @@ impl Workspace {
             Self::Sheets => ((45, 111, 73), (135, 209, 162)),
             Self::Slides => ((161, 85, 64), (233, 161, 139)),
             Self::Images => ((142, 104, 49), (224, 192, 128)),
+            Self::Video => ((150, 71, 64), (236, 143, 129)),
         };
         let (r, g, b) = if dark { night } else { light };
         egui::Color32::from_rgb(r, g, b)
@@ -54,7 +58,7 @@ impl Workspace {
             .into_iter()
             .find(|w| w.label().eq_ignore_ascii_case(s))
             .ok_or_else(|| {
-                "workspace must be home, reader, PDF Tools, writer, sheets, slides, or images"
+                "workspace must be home, reader, PDF Tools, writer, sheets, slides, images, or video"
                     .into()
             })
     }
@@ -91,8 +95,20 @@ impl Workspace {
             Self::Sheets => egui::include_image!("../assets/icons/sheets.svg"),
             Self::Slides => egui::include_image!("../assets/icons/slides.svg"),
             Self::Images => egui::include_image!("../assets/icons/images.svg"),
+            Self::Video => egui::include_image!("../assets/icons/video.svg"),
         }
     }
+}
+pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "webm", "mkv"];
+
+pub fn is_video_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            VIDEO_EXTENSIONS
+                .iter()
+                .any(|known| extension.eq_ignore_ascii_case(known))
+        })
 }
 pub const EXTENSIONS: &[&str] = &[
     "pdf",

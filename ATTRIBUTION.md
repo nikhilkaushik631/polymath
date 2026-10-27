@@ -13,6 +13,7 @@ The original assets below are contributor-original Polymath artwork, licensed un
 | assets/icons/sheets.svg | Original project contributors / local SVG | MIT OR Apache-2.0 | bfd1fec00b3d0e0a47e6dd7e2682a36c4a5fa1e43d66a359ae72157637e6843f | Application / workspace icon |
 | assets/icons/slides.svg | Original project contributors / local SVG | MIT OR Apache-2.0 | 94914025362737dc151563b5a95cb3d68e3952b4c38e8260ad31f109e09d55f1 | Application / workspace icon |
 | assets/icons/tools.svg | Polymath contributors / original local SVG | MIT OR Apache-2.0 | 601fcefa55176de4fd04aae8d5803ed222b2c6a0e1198ad117751199989dcb54 | PDF Tools workspace symbol |
+| assets/icons/video.svg | Polymath contributors / original local SVG | MIT OR Apache-2.0 | e40203988c325425f21becd9a760c96eadfa2aad5aa8d37601f55cb5d0ce8ad2 | Video workspace symbol |
 | assets/icons/writer.svg | Original project contributors / local SVG | MIT OR Apache-2.0 | 267c370e36f570548c521eb8cc770ebf5a0eda2e2e0259d4c35b589e945a5da1 | Application / workspace icon |
 
 The document previews on Home are original geometric drawings in `src/home_art.rs`, also licensed under MIT OR Apache-2.0. They do not embed screenshots or artwork from another application.

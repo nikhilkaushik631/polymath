@@ -19,3 +19,5 @@ Audio extensions: `.mp3`, `.m4a`, `.aac`, `.wav`, `.aiff`, `.aif`, `.caf`, `.fla
 The current player prioritizes a small, local integration. For large files, subtitles or broad VLC-like codec coverage, a future streaming/hardware backend would be appropriate. Its licensing, bundle size and macOS deployment need to be evaluated before adding it.
 
 For coding agents, `app.open {path}` routes media to Reader. `app.media.inspect`, `app.media.queue {offset,limit}`, `app.media.play`, `app.media.pause`, `app.media.seek {seconds}`, `app.media.previous`, `app.media.next`, `app.media.sort {by:"name"|"artist"|"album"}`, and `app.media.fullscreen {enabled}` are available through the authenticated local control bridge. `document.inspect` in Reader also reports the current media file and playback state.
+
+Video editing is a separate workspace. Open a video in Reader, then choose **Edit video**, or enter Video from Home and add clips. The timeline trims and arranges sources and writes a new MP4 through the locally installed FFmpeg CLI only on export. See [Video editor](VIDEO_EDITOR.md).

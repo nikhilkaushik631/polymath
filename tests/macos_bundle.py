@@ -14,23 +14,23 @@ try:
  while not endpoint.exists():
   if process.poll() is not None or time.monotonic()>deadline:raise RuntimeError('Bundle failed to start')
   time.sleep(.2)
- for workspace,filename in [('writer','writer.docx'),('sheets','sheets.xlsx'),('slides','slides.pptx'),('reader','reader.pdf'),('reader','notes.md'),('sheets','table.csv'),('reader','example.py'),('reader','component.tsx'),('reader','index.html')]:
+ for filename in ['writer.docx','sheets.xlsx','slides.pptx','reader.pdf','notes.md','table.csv','example.py','component.tsx','index.html']:
   path=out/filename
   subprocess.run(['open','-a',str(bundle),str(path)],check=True)
   deadline=time.monotonic()+15
-  while call('app.inspect')['workspace']!=workspace:
+  while call('app.inspect')['workspace']!='reader' or not any(tab['path']==str(path) for tab in call('app.reader.tabs')['tabs']):
    if time.monotonic()>deadline:raise AssertionError(f'Finder did not deliver {path}')
    time.sleep(.2)
-  state=call('document.inspect',{'workspace':workspace});assert state
-  print('Finder Open With:',workspace,flush=True)
- messages=[{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05'}},{'jsonrpc':'2.0','id':2,'method':'tools/list'},{'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'polymath_document','arguments':{'workspace':'sheets'}}},{'jsonrpc':'2.0','id':4,'method':'tools/call','params':{'name':'polymath_switch','arguments':{'workspace':'tools'}}}]
+  state=call('document.inspect',{'workspace':'reader'});assert state
+  print('Finder Open With: Reader tab',filename,flush=True)
+ messages=[{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05'}},{'jsonrpc':'2.0','id':2,'method':'tools/list'},{'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'polymath_document','arguments':{'workspace':'reader'}}},{'jsonrpc':'2.0','id':4,'method':'tools/call','params':{'name':'polymath_switch','arguments':{'workspace':'tools'}}}]
  result=subprocess.run(['python3',str(ROOT/'packaging/agent_bridge.py'),'--endpoint',str(endpoint)],input=''.join(json.dumps(m)+'\n' for m in messages),text=True,capture_output=True,check=True,timeout=60)
  replies=[json.loads(line) for line in result.stdout.splitlines()];assert len(replies)==4
  assert len(replies[1]['result']['tools'])==8
  switch=next(tool for tool in replies[1]['result']['tools'] if tool['name']=='polymath_switch')
  assert 'tools' in switch['inputSchema']['properties']['workspace']['enum']
  assert replies[2]['result']['isError'] is False,replies[2]
- assert 'sheets' in replies[2]['result']['content'][0]['text']
+ assert 'reader' in replies[2]['result']['content'][0]['text']
  assert replies[3]['result']['isError'] is False,replies[3]
  assert call('app.inspect')['workspace']=='tools'
  tools_state=call('ui.state',{'workspace':'tools'})
