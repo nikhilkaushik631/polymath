@@ -1,4 +1,16 @@
-# Local validation — Polymath 0.4.12, 2026-10-28
+# Local validation — Polymath 0.4.13, 2026-10-28
+
+Polymath 0.4.13 redesigns Reader's source bar. The open tab now carries the filename without a second, oversized title below it. The source toolbar is 43 points tall on a wide window and groups file type, line or table count, read-only state, search, copy and outline controls. Long tab labels allow 36 characters, enough to show `wiredleap_id_card_vertical (1).svg` in full. Narrow windows stack the controls in a 75-point bar. The copy and outline controls have accessible names and hover help.
+
+The locked debug and optimized release builds passed. Native Reader visual QA passed on the signed release bundle. Synthetic SVG with the reported filename was opened beside shell and JSX tabs; light and dark screenshots were inspected for bar alignment, tab labels, and the side-by-side SVG source and preview. `tests/native_smoke.py` passed its routing, preview, editing and quit-guard workflow with screenshot capture disabled; the focused Reader screenshots were captured separately. `cargo fmt --all --check`, Python syntax checks and `git diff --check` passed. No personal files were modified by these checks.
+
+The 0.4.13 bundle passed strict code-signature verification. `hdiutil verify` passed for the DMG, and `dist/Polymath.dmg` matches `../installers/Polymath.dmg`. The previous 0.4.12 app and installer were archived under `../installers/previous-versions/`. The installed app quit normally before replacement, and `/Applications/Polymath.app` is running 0.4.13 with an executable hash matching the tested bundle. A fresh Launch Services check confirmed all 119 configured document extensions resolve to the installed app; HTTP and HTTPS remain with the browser. The app is ad-hoc signed and is not Apple-notarized.
+
+Signed bundle and installed executable SHA-256: `6e0b913a0f6a35b90f509f7865c50810b6e74516dc407e6650a801617ed0b8bf`
+
+DMG SHA-256: `274e3577a51fb8695b08421901f7cd2ff0a60ead9e68658b425af47c089dc24e`
+
+## Previous Polymath 0.4.12 validation — 2026-10-28
 
 Polymath 0.4.12 tightens the native Reader interface. File tabs remain on one line, keep the extension visible when shortened, and have a shared new-tab button. Source preview has a compact file header and one copy action. Reader's landing page replaces the oversized empty Favorites panel with an inline state and shows recent files as full-width rows with type, location and saved page. Video preview now uses the available height at the source aspect ratio, with denser controls. Normal and full-screen playback share centered icon transport, including 30-second jumps. Reader-first opens, saved documents and the Video Studio export workflow remain intact.
 

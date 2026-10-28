@@ -62,17 +62,30 @@ with (OUT / "app.log").open("w") as log:
         call("app.theme", {"dark": False})
         first = OUT / "march9_2026_addip_source_with_a_very_long_name.sh"
         second = OUT / "visual-audit-component.jsx"
+        third = OUT / "wiredleap_id_card_vertical (1).svg"
         first.write_text("#!/bin/sh\nprintf 'Polymath'\n", encoding="utf-8")
         second.write_text("export const Preview = () => <section>Polymath</section>;\n", encoding="utf-8")
-        for path in (first, second):
+        third.write_text(
+            "\n".join(
+                [
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="404" height="638" viewBox="0 0 404 638">',
+                    '<rect width="404" height="638" rx="28" fill="#e9f4fa"/>',
+                    '<circle cx="202" cy="230" r="90" fill="#73bcd7"/>',
+                    *[f"<!-- source line {i + 4} -->" for i in range(80)],
+                    "</svg>",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        for path in (first, second, third):
             assert call("app.open", {"path": str(path)})["workspace"] == "reader"
-        assert len(call("app.reader.tabs")["tabs"]) == 2
+        assert len(call("app.reader.tabs")["tabs"]) == 3
         screenshot("reader-tabs-and-source")
         call("app.theme", {"dark": True})
         screenshot("reader-tabs-and-source-dark")
         call("app.theme", {"dark": False})
         call("app.reader.favorite", {"value": True, "path": str(second)})
-        for path in (first, second):
+        for path in (first, second, third):
             call("app.reader.close", {"path": str(path)})
         screenshot("reader-recent-and-favorite")
 

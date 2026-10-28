@@ -87,7 +87,7 @@ fn file_name(path: &str) -> String {
 }
 
 fn compact_tab_title(title: &str) -> String {
-    const MAX_CHARS: usize = 26;
+    const MAX_CHARS: usize = 36;
     let title: String = title
         .chars()
         .map(|character| {
