@@ -1,4 +1,16 @@
-# Local validation — Polymath 0.4.18, 2026-10-28
+# Local validation — Polymath 0.4.19, 2026-10-28
+
+Voice settings now puts the global dictation shortcut, live permission state, and recovery action in the first panel. A blocked Input Monitoring or Accessibility state offers a direct System Settings button and **Check access**, which restarts the companion. The in-app microphone and PDF narration settings are grouped below. Settings navigation uses simpler, consistent selection styling, and the dialog shows more content before scrolling.
+
+All 35 Rust tests passed. An isolated native app used a synthetic helper status reporting Input Monitoring denial; light and dark screenshots confirmed that the blocked state and both actions fit above the fold. The Input Monitoring System Settings deep link was opened and verified separately. macOS still requires the user to grant the permission; this validation does not claim live cross-app dictation on the installed machine.
+
+The locked optimized build passed. The signed 0.4.19 bundle passed the native global-shortcut lifecycle test and the full native smoke test for settings, file routing, previews, editors and the unsaved-change guard. The bundle signature and DMG checksum verified. The previous 0.4.18 app and installer are archived under `../installers/previous-versions/`. `/Applications/Polymath.app` and the shared installer match the tested bundle and DMG. All 119 configured file defaults still resolve to the installed app.
+
+Installed and signed-bundle executable SHA-256: `cd2e4a3d0343bebf81017e1ee4f866d5baf50caa6eb62c92ea124d48546d5805`
+
+DMG SHA-256: `9b123deb98b3d90e47db5a078f151f6ed22a6a20186cc8de0a1ff1b35387c492`
+
+## Previous Polymath 0.4.18 validation — 2026-10-28
 
 The editing toolbar microphone is now limited to Writer, Sheets, Slides and PDF Tools; Home, Reader, Images and Video no longer offer a click-to-dictate action with nowhere to put its result. The systemwide hold shortcut accepts Command + Option from either side of the keyboard, including mixed pairs. A short hold delay and key-down cancellation keep ordinary Command-Option-key shortcuts from starting a recording.
 

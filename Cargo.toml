@@ -1,6 +1,6 @@
 [package]
 name = "polymath"
-version = "0.4.18"
+version = "0.4.19"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "One local Polymath workspace for documents, images, audio, and video"

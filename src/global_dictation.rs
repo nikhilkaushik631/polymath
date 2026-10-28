@@ -13,6 +13,19 @@ pub(crate) struct GlobalTranscript {
     pub pasted: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DictationPhase {
+    Off,
+    Starting,
+    Ready,
+    InputMonitoring,
+    Accessibility,
+    Listening,
+    Transcribing,
+    Copied,
+    Error,
+}
+
 pub(crate) struct GlobalDictation {
     pub enabled: bool,
     pub status: String,
@@ -34,6 +47,28 @@ impl Default for GlobalDictation {
 }
 
 impl GlobalDictation {
+    pub fn phase(&self) -> DictationPhase {
+        if !self.enabled {
+            return DictationPhase::Off;
+        }
+        match self.status.as_str() {
+            status if status.starts_with("Allow Input Monitoring") => {
+                DictationPhase::InputMonitoring
+            }
+            status if status.starts_with("Shortcut ready · allow Accessibility") => {
+                DictationPhase::Accessibility
+            }
+            status if status.starts_with("Starting") => DictationPhase::Starting,
+            status if status.starts_with("Listening") => DictationPhase::Listening,
+            status if status.starts_with("Transcribing") => DictationPhase::Transcribing,
+            status if status.starts_with("Ready") || status.starts_with("Inserted") => {
+                DictationPhase::Ready
+            }
+            status if status.starts_with("Transcript copied") => DictationPhase::Copied,
+            _ => DictationPhase::Error,
+        }
+    }
+
     pub fn set_enabled(&mut self, enabled: bool, ctx: &Context, language: &str) {
         self.enabled = enabled;
         if !enabled {
@@ -198,5 +233,15 @@ mod tests {
             Some(Event::Transcript(GlobalTranscript { text, pasted: true })) if text == "नमस्ते"
         ));
         assert!(parse_event("not json").is_none());
+    }
+
+    #[test]
+    fn denied_input_monitoring_is_not_reported_as_ready() {
+        let mut dictation = GlobalDictation::default();
+        dictation.enabled = true;
+        dictation.status = "Allow Input Monitoring for Polymath in macOS Privacy & Security, then turn this setting off and on again.".into();
+        assert_eq!(dictation.phase(), DictationPhase::InputMonitoring);
+        dictation.status = "Ready · hold ⌘ + ⌥ in any app".into();
+        assert_eq!(dictation.phase(), DictationPhase::Ready);
     }
 }

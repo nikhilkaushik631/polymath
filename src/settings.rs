@@ -59,7 +59,7 @@ impl Polymath {
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
-            .default_size(vec2(700.0, 520.0))
+            .default_size(vec2(700.0, 650.0))
             .min_width(650.0)
             .max_width(760.0)
             .max_height((ctx.content_rect().height() - 64.0).max(260.0))
@@ -93,7 +93,7 @@ impl Polymath {
                 ui.visuals_mut().selection.stroke = egui::Stroke::new(1.0, selected_ink);
                 ui.style_mut().spacing.button_padding = vec2(12.0, 8.0);
                 ui.style_mut().spacing.item_spacing = vec2(8.0, 8.0);
-                let body_height = ui.available_height().clamp(240.0, 430.0);
+                let body_height = ui.available_height().clamp(240.0, 555.0);
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.set_width(158.0);
@@ -120,6 +120,7 @@ impl Polymath {
                                         } else {
                                             Color32::TRANSPARENT
                                         })
+                                        .stroke(egui::Stroke::NONE)
                                         .corner_radius(8)
                                         .min_size(vec2(145.0, 35.0)),
                                 )
@@ -248,25 +249,238 @@ impl Polymath {
     }
 
     fn voice_settings(&mut self, ui: &mut egui::Ui, muted: Color32) {
-        heading(
-            ui,
-            "Voice",
-            "Speak to write. Listen to a PDF with a voice on this Mac.",
-            muted,
-        );
-        ui.add_space(16.0);
+        use crate::global_dictation::DictationPhase;
+
+        let accent = Workspace::Reader.accent(self.dark);
+        let chrome = crate::ui_kit::chrome(self.dark);
+        let switch_theme = crate::ui_kit::theme(self.dark, Workspace::Reader);
+        heading(ui, "Voice", "Dictate locally. Read PDFs aloud.", muted);
+        ui.add_space(12.0);
+
+        let width = ui.available_width();
+        let hero_fill = if self.dark {
+            Color32::from_rgb(27, 41, 49)
+        } else {
+            Color32::from_rgb(237, 246, 250)
+        };
+        let hero_line = if self.dark {
+            Color32::from_rgb(62, 94, 109)
+        } else {
+            Color32::from_rgb(188, 216, 229)
+        };
+        egui::Frame::new()
+            .fill(hero_fill)
+            .stroke(egui::Stroke::new(1.0, hero_line))
+            .corner_radius(12)
+            .inner_margin(16)
+            .show(ui, |ui| {
+                ui.set_width((width - 34.0).max(100.0));
+                ui.horizontal(|ui| {
+                    ui.add(pdfcraft_ui_egui::icons::image("mic", 20.0, accent));
+                    ui.label(RichText::new("Dictate anywhere").size(16.0).strong());
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let mut enabled = self.global_dictation.enabled;
+                        egui_shadcn::switch_with_props(
+                            ui,
+                            &switch_theme,
+                            egui_shadcn::SwitchProps::new(
+                                egui::Id::new("polymath-global-dictation"),
+                                &mut enabled,
+                                "Shortcut",
+                            )
+                            .accent(accent),
+                        );
+                        if enabled != self.global_dictation.enabled {
+                            self.global_dictation.set_enabled(
+                                enabled,
+                                ui.ctx(),
+                                &self.voice.language,
+                            );
+                            self.save_preferences();
+                        }
+                    });
+                });
+                ui.add_space(9.0);
+                ui.horizontal(|ui| {
+                    shortcut_key(ui, "⌘", self.dark);
+                    ui.label(RichText::new("+").size(12.0).color(muted));
+                    shortcut_key(ui, "⌥", self.dark);
+                    ui.add_space(5.0);
+                    ui.label(
+                        RichText::new("Hold · speak · release")
+                            .size(12.0)
+                            .color(chrome.ink),
+                    );
+                });
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(5.0);
+
+                let phase = self.global_dictation.phase();
+                let (label, detail, ink, fill) = match phase {
+                    DictationPhase::Off => {
+                        ("Off", "Enable to use in other apps.", muted, chrome.hover)
+                    }
+                    DictationPhase::Starting => {
+                        ("Checking", "Checking macOS access…", accent, hero_fill)
+                    }
+                    DictationPhase::Ready => (
+                        "Ready",
+                        "Use the shortcut in any text field.",
+                        accent,
+                        hero_fill,
+                    ),
+                    DictationPhase::InputMonitoring => (
+                        "Setup needed",
+                        "Input Monitoring is blocking the shortcut.",
+                        if self.dark {
+                            Color32::from_rgb(248, 199, 119)
+                        } else {
+                            Color32::from_rgb(121, 70, 15)
+                        },
+                        if self.dark {
+                            Color32::from_rgb(67, 49, 29)
+                        } else {
+                            Color32::from_rgb(255, 241, 214)
+                        },
+                    ),
+                    DictationPhase::Accessibility => (
+                        "Setup needed",
+                        "Accessibility is needed to paste into other apps.",
+                        if self.dark {
+                            Color32::from_rgb(248, 199, 119)
+                        } else {
+                            Color32::from_rgb(121, 70, 15)
+                        },
+                        if self.dark {
+                            Color32::from_rgb(67, 49, 29)
+                        } else {
+                            Color32::from_rgb(255, 241, 214)
+                        },
+                    ),
+                    DictationPhase::Listening => (
+                        "Listening",
+                        "Release either key to insert.",
+                        accent,
+                        hero_fill,
+                    ),
+                    DictationPhase::Transcribing => {
+                        ("Working", "Transcribing on this Mac…", accent, hero_fill)
+                    }
+                    DictationPhase::Copied => (
+                        "Copied",
+                        "Paste the transcript into your app.",
+                        accent,
+                        hero_fill,
+                    ),
+                    DictationPhase::Error => (
+                        "Needs attention",
+                        "The shortcut could not start.",
+                        muted,
+                        chrome.hover,
+                    ),
+                };
+                ui.horizontal(|ui| {
+                    egui::Frame::new()
+                        .fill(fill)
+                        .corner_radius(6)
+                        .inner_margin(egui::Margin::symmetric(8, 4))
+                        .show(ui, |ui| {
+                            ui.label(RichText::new(label).size(11.5).strong().color(ink));
+                        });
+                    ui.label(RichText::new(detail).size(11.5).color(chrome.ink));
+                });
+                if matches!(
+                    phase,
+                    DictationPhase::InputMonitoring | DictationPhase::Accessibility
+                ) {
+                    let (pane, destination) = if phase == DictationPhase::InputMonitoring {
+                        ("Privacy_ListenEvent", "Input Monitoring")
+                    } else {
+                        ("Privacy_Accessibility", "Accessibility")
+                    };
+                    ui.add_space(7.0);
+                    ui.label(
+                        RichText::new(format!(
+                            "Allow Polymath in {destination}, then check access here."
+                        ))
+                        .size(11.5)
+                        .color(muted),
+                    );
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if egui_shadcn::Button::new(format!("Open {destination}"))
+                            .variant(egui_shadcn::ButtonVariant::Solid)
+                            .size(egui_shadcn::ButtonSize::Sm)
+                            .show(ui, &switch_theme)
+                            .clicked()
+                            && let Err(error) = open_privacy_pane(pane)
+                        {
+                            self.voice.notice = error;
+                        }
+                        if egui_shadcn::Button::new("Check access")
+                            .variant(egui_shadcn::ButtonVariant::Outline)
+                            .size(egui_shadcn::ButtonSize::Sm)
+                            .show(ui, &switch_theme)
+                            .clicked()
+                        {
+                            self.global_dictation.set_enabled(
+                                false,
+                                ui.ctx(),
+                                &self.voice.language,
+                            );
+                            self.global_dictation
+                                .set_enabled(true, ui.ctx(), &self.voice.language);
+                        }
+                    });
+                    if self
+                        .voice
+                        .notice
+                        .starts_with("Could not open System Settings")
+                    {
+                        ui.add_space(6.0);
+                        ui.label(RichText::new(&self.voice.notice).size(11.5).color(ink));
+                    }
+                } else if phase == DictationPhase::Error {
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(&self.global_dictation.status)
+                            .size(11.5)
+                            .color(muted),
+                    );
+                    if egui_shadcn::Button::new("Retry shortcut")
+                        .variant(egui_shadcn::ButtonVariant::Outline)
+                        .size(egui_shadcn::ButtonSize::Sm)
+                        .show(ui, &switch_theme)
+                        .clicked()
+                    {
+                        self.global_dictation
+                            .set_enabled(false, ui.ctx(), &self.voice.language);
+                        self.global_dictation
+                            .set_enabled(true, ui.ctx(), &self.voice.language);
+                    }
+                }
+            });
+
+        ui.add_space(15.0);
         settings_card(ui, self.dark, |ui| {
-            ui.label(RichText::new("Dictation").size(15.0).strong());
-            ui.label(
-                RichText::new(
-                    "In Writer, Sheets, Slides or PDF Tools, select a text field, press the toolbar microphone, speak, then press it again.",
-                )
-                .size(12.0)
-                .color(muted),
-            );
-            ui.add_space(10.0);
             ui.horizontal(|ui| {
-                ui.label("Language");
+                ui.add(pdfcraft_ui_egui::icons::image(
+                    "text-cursor-input",
+                    18.0,
+                    Workspace::Writer.accent(self.dark),
+                ));
+                ui.label(RichText::new("In Polymath").size(15.0).strong());
+            });
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new("Select a field in Writer, Sheets, Slides or PDF Tools. Click the toolbar microphone to start and stop.")
+                    .size(11.5)
+                    .color(muted),
+            );
+            ui.add_space(9.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Language").size(12.0));
                 egui::ComboBox::from_id_salt("polymath-dictation-language")
                     .selected_text(
                         Voice::languages()
@@ -290,83 +504,36 @@ impl Polymath {
                     });
             });
             if !self.voice.notice.is_empty() {
-                ui.add_space(8.0);
-                ui.label(RichText::new(&self.voice.notice).size(12.0));
+                ui.add_space(7.0);
+                ui.label(RichText::new(&self.voice.notice).size(11.5).color(muted));
             }
             if !self.voice.last_transcript.is_empty() {
                 ui.add_space(10.0);
-                ui.label(RichText::new("Last transcript").size(12.0).strong());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Last transcript").size(12.0).strong());
+                    if egui_shadcn::Button::new("Copy transcript")
+                        .variant(egui_shadcn::ButtonVariant::Ghost)
+                        .size(egui_shadcn::ButtonSize::Sm)
+                        .show(ui, &switch_theme)
+                        .clicked()
+                    {
+                        ui.ctx().copy_text(self.voice.last_transcript.clone());
+                    }
+                });
                 ui.add(
                     egui::TextEdit::multiline(&mut self.voice.last_transcript)
                         .desired_rows(2)
                         .desired_width(f32::INFINITY),
                 );
-                if egui_shadcn::Button::new("Copy transcript")
-                    .variant(egui_shadcn::ButtonVariant::Outline)
-                    .size(egui_shadcn::ButtonSize::Sm)
-                    .show(ui, &crate::ui_kit::theme(self.dark, Workspace::Reader))
-                    .clicked()
-                {
-                    ui.ctx().copy_text(self.voice.last_transcript.clone());
-                }
             }
-        });
-        ui.add_space(12.0);
-        settings_card(ui, self.dark, |ui| {
-            ui.label(RichText::new("Dictate anywhere").size(15.0).strong());
-            ui.add_space(5.0);
-            ui.label(
-                RichText::new("Hold ⌘ + ⌥ (either side) in any app's text field, then speak. Release either key to transcribe and insert.")
-                    .size(12.0)
-                    .color(muted),
-            );
+
+            ui.add_space(13.0);
+            ui.separator();
             ui.add_space(10.0);
-            let mut enabled = self.global_dictation.enabled;
-            let switch_theme = crate::ui_kit::theme(self.dark, Workspace::Reader);
-            egui_shadcn::switch_with_props(
-                ui,
-                &switch_theme,
-                egui_shadcn::SwitchProps::new(
-                    egui::Id::new("polymath-global-dictation"),
-                    &mut enabled,
-                    "Enable shortcut",
-                )
-                .accent(Workspace::Reader.accent(self.dark)),
-            );
-            if enabled != self.global_dictation.enabled {
-                self.global_dictation
-                    .set_enabled(enabled, ui.ctx(), &self.voice.language);
-                self.save_preferences();
-            }
-            ui.add_space(7.0);
-            ui.label(
-                RichText::new(&self.global_dictation.status)
-                    .size(12.0)
-                    .color(muted),
-            );
-            if enabled {
-                ui.add_space(5.0);
-                if egui_shadcn::Button::new("Retry shortcut")
-                    .variant(egui_shadcn::ButtonVariant::Ghost)
-                    .size(egui_shadcn::ButtonSize::Sm)
-                    .show(ui, &switch_theme)
-                    .clicked()
-                {
-                    self.global_dictation
-                        .set_enabled(false, ui.ctx(), &self.voice.language);
-                    self.global_dictation
-                        .set_enabled(true, ui.ctx(), &self.voice.language);
-                }
-                ui.label(
-                    RichText::new("macOS may ask for Input Monitoring and Accessibility access. Polymath stays open in the background; speech stays on this Mac.")
-                        .size(11.5)
-                        .color(muted),
-                );
-            }
-        });
-        ui.add_space(12.0);
-        settings_card(ui, self.dark, |ui| {
-            ui.label(RichText::new("PDF read aloud").size(15.0).strong());
+            ui.horizontal(|ui| {
+                ui.add(pdfcraft_ui_egui::icons::image("book-open", 18.0, accent));
+                ui.label(RichText::new("Read a PDF aloud").size(15.0).strong());
+            });
             let active_pdf = (self.active == Workspace::Tools
                 || (self.active == Workspace::Reader
                     && self.source.is_none()
@@ -379,18 +546,19 @@ impl Polymath {
                 .and_then(|index| self.reader.views.get(index))
                 .map(|view| view.current + 1)
                 .unwrap_or(1);
+            ui.add_space(4.0);
             ui.label(
                 RichText::new(if active_pdf {
-                    format!("Read from page {page} to the end of the open PDF.")
+                    format!("Start at page {page} of the open PDF.")
                 } else {
                     "Open a PDF in Reader to use narration.".to_owned()
                 })
-                .size(12.0)
+                .size(11.5)
                 .color(muted),
             );
             ui.add_space(9.0);
             ui.horizontal(|ui| {
-                ui.label("Voice");
+                ui.label(RichText::new("Voice").size(12.0));
                 egui::ComboBox::from_id_salt("polymath-narration-voice")
                     .selected_text(if self.voice.voice.is_empty() {
                         "No installed voices"
@@ -411,13 +579,16 @@ impl Polymath {
                             });
                     });
             });
-            ui.add_space(10.0);
+            ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui
-                    .add_enabled(
-                        active_pdf && !self.voice.voice.is_empty(),
-                        egui::Button::new("Read aloud"),
-                    )
+                    .add_enabled_ui(active_pdf && !self.voice.voice.is_empty(), |ui| {
+                        egui_shadcn::Button::new("Read aloud")
+                            .variant(egui_shadcn::ButtonVariant::Solid)
+                            .size(egui_shadcn::ButtonSize::Sm)
+                            .show(ui, &switch_theme)
+                    })
+                    .inner
                     .clicked()
                     && let Some((index, id)) = self.reader.active_ids()
                     && let Some(doc) = self.reader.session.docs().iter().find(|doc| doc.id == id)
@@ -427,24 +598,28 @@ impl Polymath {
                         .narration
                         .start(doc.export_source(), page, &self.voice.voice);
                 }
-                if ui
-                    .add_enabled(self.voice.narration.busy(), egui::Button::new("Stop"))
-                    .clicked()
+                if self.voice.narration.busy()
+                    && egui_shadcn::Button::new("Stop reading")
+                        .variant(egui_shadcn::ButtonVariant::Outline)
+                        .size(egui_shadcn::ButtonSize::Sm)
+                        .show(ui, &switch_theme)
+                        .clicked()
                 {
                     self.voice.narration.stop();
                 }
             });
             if !self.voice.narration.status.is_empty() {
+                ui.add_space(5.0);
                 ui.label(
                     RichText::new(&self.voice.narration.status)
-                        .size(12.0)
+                        .size(11.5)
                         .color(muted),
                 );
             }
         });
-        ui.add_space(12.0);
+        ui.add_space(10.0);
         ui.label(
-            RichText::new("Dictation uses the bundled model. Narration uses installed macOS voices. Audio stays on this Mac.")
+            RichText::new("Transcription and narration stay on this Mac.")
                 .size(11.0)
                 .color(muted),
         );
@@ -583,4 +758,31 @@ fn settings_card(ui: &mut egui::Ui, dark: bool, body: impl FnOnce(&mut egui::Ui)
             ui.set_width((width - 34.0).max(100.0));
             body(ui);
         });
+}
+
+fn shortcut_key(ui: &mut egui::Ui, key: &str, dark: bool) {
+    let chrome = crate::ui_kit::chrome(dark);
+    egui::Frame::new()
+        .fill(chrome.surface)
+        .stroke(egui::Stroke::new(1.0, chrome.line))
+        .corner_radius(6)
+        .inner_margin(egui::Margin::symmetric(8, 4))
+        .show(ui, |ui| {
+            ui.label(RichText::new(key).size(13.0).strong());
+        });
+}
+
+fn open_privacy_pane(pane: &str) -> Result<(), String> {
+    let url = format!("x-apple.systempreferences:com.apple.preference.security?{pane}");
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg("-a")
+        .arg("System Settings")
+        .arg(url)
+        .status()
+        .map_err(|error| format!("Could not open System Settings: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Could not open System Settings. Open Privacy & Security manually.".to_owned())
+    }
 }
