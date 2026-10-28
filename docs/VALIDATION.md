@@ -1,4 +1,16 @@
-# Local validation — Polymath 0.4.11, 2026-10-28
+# Local validation — Polymath 0.4.12, 2026-10-28
+
+Polymath 0.4.12 tightens the native Reader interface. File tabs remain on one line, keep the extension visible when shortened, and have a shared new-tab button. Source preview has a compact file header and one copy action. Reader's landing page replaces the oversized empty Favorites panel with an inline state and shows recent files as full-width rows with type, location and saved page. Video preview now uses the available height at the source aspect ratio, with denser controls. Normal and full-screen playback share centered icon transport, including 30-second jumps. Reader-first opens, saved documents and the Video Studio export workflow remain intact.
+
+The one-job locked release check and optimized build, Rust formatting, Python syntax and whitespace checks passed. `tests/reader_visual_qa.py` passed against the final signed release bundle and captured light/dark Reader landing, multiple source tabs including a long name, a populated recent/favorite list, actual video playback, and full-screen video. The screenshots were inspected. `tests/native_smoke.py` passed its full functional workflow on the final signed bundle with screenshot capture disabled; its earlier screenshot run stopped at an intermittent macOS image-fullscreen capture timeout before the source and video checks. The focused capture succeeded for the changed surfaces. No personal files were modified by these tests.
+
+The 0.4.12 bundle passed strict code-signature verification, and `hdiutil verify` passed for the DMG. `dist/Polymath.dmg` and `../installers/Polymath.dmg` have identical SHA-256 hashes; the prior DMG and installed app are archived as `../installers/previous-versions/Polymath-0.4.11.*`. The installed `/Applications/Polymath.app` quit normally before replacement and is running as 0.4.12. Its executable hash matches the tested bundle. A fresh Launch Services check confirmed all 119 configured document extensions resolve to the installed app; HTTP/HTTPS remain with the browser. The app remains ad-hoc signed, without Apple notarization.
+
+Signed bundle and installed executable SHA-256: `ff6381d0cd786408c3f490d302ee54bf5c1b93c4d7e59960bd1355cc18f87097`
+
+DMG SHA-256: `da5497b3412680a0b3331330d5735b4ce58bed5ec41ca689bfb0eca37360c60f`
+
+## Previous Polymath 0.4.11 validation — 2026-10-28
 
 Polymath 0.4.11 adds a separate native Video workspace. Videos still open in Reader first; Edit video deliberately adds a clip to a timeline. The editor supports frame thumbnails, trim handles and precise in/out values, drag or keyboard reorder, a separate soundtrack, original-audio stripping or mixing, quality presets, an explicit MP4 destination, progress and cancellation. The preview is a still frame scrubber; live composite playback, transitions and multiple soundtrack layers are not implemented. FFmpeg and ffprobe are installed locally and invoked on demand, not bundled.
 

@@ -95,6 +95,11 @@ try:
  jsx.write_text('import { motion } from "framer-motion";\nexport default function Slide() {\n'+'\n'.join(f'  const row{i} = <div data-row="{i}">Row {i}</div>;' for i in range(1,72))+'\n}\n',encoding='utf-8')
  assert call('app.open',{'path':str(jsx)})['workspace']=='reader'
  assert inspect('reader')['lines']==75
+ long_tab=out/'march9_2026_addip_source_with_a_very_long_name.sh'
+ long_tab.write_text('#!/bin/sh\nprintf "Polymath"\n',encoding='utf-8')
+ assert call('app.open',{'path':str(long_tab)})['workspace']=='reader'
+ shot('reader-tabs-many-light')
+ assert call('app.reader.close',{'path':str(long_tab)})['closeRequested'] is True
  tabs=call('app.reader.tabs')['tabs']
  assert {str(svg),str(jsx)}.issubset({tab['path'] for tab in tabs}),tabs
  assert call('app.reader.select',{'path':str(svg)})['active']

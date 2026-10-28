@@ -6112,7 +6112,7 @@ dependencies = [
 
 [[package]]
 name = "polymath"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "arboard",
  "base64",

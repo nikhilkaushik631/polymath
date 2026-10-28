@@ -294,32 +294,23 @@ fn decode_utf16(bytes: &[u8], little_endian: bool) -> Result<String, String> {
         .map_err(|_| "The file contains invalid UTF-16 text".into())
 }
 
-pub fn show(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) -> bool {
-    let mut open = false;
-    let (canvas, panel, ink, muted, rule) = if dark {
-        (
-            Color32::from_gray(22),
-            Color32::from_gray(30),
-            Color32::from_gray(237),
-            Color32::from_gray(172),
-            Color32::from_gray(58),
-        )
-    } else {
-        (
-            Color32::from_gray(250),
-            Color32::from_gray(240),
-            Color32::from_gray(27),
-            Color32::from_gray(95),
-            Color32::from_gray(215),
-        )
-    };
+pub fn show(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) {
+    let chrome = crate::ui_kit::chrome(dark);
+    let (canvas, panel, ink, muted, rule) = (
+        chrome.canvas,
+        chrome.surface,
+        chrome.ink,
+        chrome.muted,
+        chrome.line,
+    );
+    let accent = crate::Workspace::Reader.accent(dark);
     let compact = ui.available_width() < 760.0;
     egui::Panel::top("source-toolbar")
-        .exact_size(if compact { 86.0 } else { 56.0 })
+        .exact_size(if compact { 88.0 } else { 62.0 })
         .frame(
             egui::Frame::new()
                 .fill(panel)
-                .inner_margin(egui::Margin::symmetric(18, 8))
+                .inner_margin(egui::Margin::symmetric(16, 7))
                 .stroke(Stroke::new(1.0, rule)),
         )
         .show(ui, |ui| {
@@ -329,24 +320,17 @@ pub fn show(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) -> bool {
             );
             ui.horizontal_centered(|ui| {
                 let name_width = if compact {
-                    (ui.available_width() - 170.0).clamp(100.0, 340.0)
+                    (ui.available_width() - 54.0).clamp(100.0, 410.0)
                 } else {
-                    (ui.available_width() - 430.0).clamp(100.0, 340.0)
+                    (ui.available_width() - 330.0).clamp(100.0, 410.0)
                 };
-                ui.add_sized(
-                    [name_width, 25.0],
-                    egui::Label::new(RichText::new(name).size(15.0).strong().color(ink))
-                        .truncate()
-                        .halign(Align::LEFT),
-                )
-                .on_hover_text(&file.path);
-                egui_shadcn::badge(
-                    ui,
-                    &crate::ui_kit::theme(dark, crate::Workspace::Reader),
-                    egui_shadcn::BadgeProps::new(&file.language)
-                        .variant(egui_shadcn::BadgeVariant::Outline)
-                        .size(egui_shadcn::BadgeSize::Size2),
-                );
+                egui::Frame::new()
+                    .fill(panel.lerp_to_gamma(accent, if dark { 0.24 } else { 0.10 }))
+                    .corner_radius(8)
+                    .inner_margin(egui::Margin::same(7))
+                    .show(ui, |ui| {
+                        ui.add(pdfcraft_ui_egui::icons::image("file-code", 18.0, accent));
+                    });
                 let count = file.table.as_ref().map_or_else(
                     || format!("{} lines", file.line_count()),
                     |table| {
@@ -357,16 +341,37 @@ pub fn show(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) -> bool {
                         )
                     },
                 );
-                ui.label(RichText::new(count).size(11.0).color(muted));
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.add_sized(
+                        [name_width, 20.0],
+                        egui::Label::new(RichText::new(name).size(14.0).strong().color(ink))
+                            .truncate()
+                            .halign(Align::LEFT),
+                    )
+                    .on_hover_text(&file.path);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 5.0;
+                        ui.label(
+                            RichText::new(&file.language)
+                                .size(10.5)
+                                .strong()
+                                .color(accent),
+                        );
+                        ui.label(RichText::new("·").size(11.0).color(muted));
+                        ui.label(RichText::new(count).size(11.0).color(muted));
+                        ui.label(RichText::new("· Read only").size(11.0).color(muted));
+                    });
+                });
                 if !compact {
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        source_actions(ui, file, &mut open, dark);
+                        source_actions(ui, file, dark);
                     });
                 }
             });
             if compact {
                 ui.add_space(4.0);
-                ui.horizontal(|ui| source_actions(ui, file, &mut open, dark));
+                ui.horizontal(|ui| source_actions(ui, file, dark));
             }
         });
 
@@ -433,7 +438,6 @@ pub fn show(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) -> bool {
                 viewer.document(ui);
             }
         });
-    open
 }
 
 fn table_preview(ui: &mut egui::Ui, table: &DelimitedTable, dark: bool) {
@@ -751,7 +755,7 @@ impl SourceViewer<'_> {
     }
 }
 
-fn source_actions(ui: &mut egui::Ui, file: &mut SourceFile, open: &mut bool, dark: bool) {
+fn source_actions(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) {
     let theme = crate::ui_kit::theme(dark, crate::Workspace::Reader);
     if !file.symbols.is_empty() {
         let label = if file.show_outline { "›" } else { "‹" };
@@ -769,18 +773,15 @@ fn source_actions(ui: &mut egui::Ui, file: &mut SourceFile, open: &mut bool, dar
             file.show_outline = !file.show_outline;
         }
     }
-    if egui_shadcn::Button::new("Open another…")
-        .variant(egui_shadcn::ButtonVariant::Outline)
-        .size(egui_shadcn::ButtonSize::Sm)
-        .show(ui, &theme)
-        .clicked()
-    {
-        *open = true;
-    }
-    if egui_shadcn::Button::new("Copy all")
-        .variant(egui_shadcn::ButtonVariant::Ghost)
-        .size(egui_shadcn::ButtonSize::Sm)
-        .show(ui, &theme)
+    if ui
+        .add(
+            egui::Button::image_and_text(
+                pdfcraft_ui_egui::icons::image("copy", 14.0, crate::ui_kit::chrome(dark).ink),
+                "Copy",
+            )
+            .min_size(vec2(70.0, 29.0))
+            .corner_radius(7),
+        )
         .on_hover_text("Copy the source text")
         .clicked()
     {
@@ -791,7 +792,7 @@ fn source_actions(ui: &mut egui::Ui, file: &mut SourceFile, open: &mut bool, dar
         &theme,
         egui_shadcn::InputProps::new("source-find", &mut file.query)
             .placeholder("Find in file")
-            .width(150.0),
+            .width(170.0),
     );
 }
 

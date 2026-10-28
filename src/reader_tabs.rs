@@ -2,7 +2,7 @@
 //! engine's save and recovery path; read-only previews keep their live viewer state in memory.
 
 use crate::{Polymath, Workspace, home_fonts, image_view, media_view, source_view};
-use egui::{Color32, RichText, Stroke, vec2};
+use egui::{Color32, RichText, Stroke, TextWrapMode, vec2};
 use pdfcraft_engine::DocId;
 use serde_json::{Value, json};
 use std::path::Path;
@@ -84,6 +84,34 @@ fn file_name(path: &str) -> String {
         .filter(|name| !name.is_empty())
         .unwrap_or(path)
         .to_owned()
+}
+
+fn compact_tab_title(title: &str) -> String {
+    const MAX_CHARS: usize = 26;
+    let title: String = title
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect();
+    if title.chars().count() <= MAX_CHARS {
+        return title;
+    }
+    let suffix = Path::new(&title)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .filter(|extension| extension.chars().count() <= 7)
+        .map(|extension| format!(".{extension}"))
+        .unwrap_or_default();
+    let prefix_len = MAX_CHARS.saturating_sub(suffix.chars().count() + 1);
+    format!(
+        "{}…{suffix}",
+        title.chars().take(prefix_len).collect::<String>()
+    )
 }
 
 impl Polymath {
@@ -380,16 +408,17 @@ impl Polymath {
         true
     }
 
-    pub(crate) fn reader_tabs_ui(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn reader_tabs_ui(&mut self, ui: &mut egui::Ui) -> bool {
         self.ensure_reader_tab(ui.ctx());
         let tabs = self.reader_tabs();
         if tabs.is_empty() {
-            return;
+            return false;
         }
         let chrome = crate::ui_kit::chrome(self.dark);
         let accent = Workspace::Reader.accent(self.dark);
         let mut selected = None;
         let mut closed = None;
+        let mut open_requested = false;
         egui::Panel::top("polymath-reader-tabs")
             .exact_size(38.0)
             .frame(
@@ -424,15 +453,18 @@ impl Polymath {
                                     .show(ui, |ui| {
                                         ui.horizontal_centered(|ui| {
                                             ui.spacing_mut().item_spacing.x = 2.0;
-                                            let name = if tab.title.chars().count() > 24 {
-                                                format!(
-                                                    "{}…",
-                                                    tab.title.chars().take(23).collect::<String>()
-                                                )
-                                            } else {
-                                                tab.title.clone()
+                                            let title = compact_tab_title(&tab.title);
+                                            let icon = match tab.kind {
+                                                "Source" => "file-code",
+                                                "Image" => "image",
+                                                "Media" => "film",
+                                                _ => "file-text",
                                             };
-                                            let title = format!("{} · {}", name, tab.kind);
+                                            ui.add(pdfcraft_ui_egui::icons::image(
+                                                icon,
+                                                14.0,
+                                                if tab.active { accent } else { chrome.muted },
+                                            ));
                                             if ui
                                                 .add(
                                                     egui::Button::new(
@@ -446,7 +478,8 @@ impl Polymath {
                                                     )
                                                     .fill(Color32::TRANSPARENT)
                                                     .stroke(Stroke::NONE)
-                                                    .min_size(vec2(100.0, 25.0)),
+                                                    .wrap_mode(TextWrapMode::Extend)
+                                                    .min_size(vec2(78.0, 25.0)),
                                                 )
                                                 .on_hover_text(
                                                     tab.path.as_deref().unwrap_or(&tab.title),
@@ -485,6 +518,25 @@ impl Polymath {
                                         });
                                     });
                             }
+                            let response = ui.add(
+                                egui::Button::image(pdfcraft_ui_egui::icons::image(
+                                    "plus",
+                                    15.0,
+                                    chrome.muted,
+                                ))
+                                .frame(false)
+                                .min_size(vec2(30.0, 28.0)),
+                            );
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::Button,
+                                    true,
+                                    "Open file in a new Reader tab",
+                                )
+                            });
+                            open_requested = response
+                                .on_hover_text("Open file in a new tab · ⌘O")
+                                .clicked();
                         });
                     });
             });
@@ -494,5 +546,6 @@ impl Polymath {
         } else if let Some(id) = selected {
             let _ = self.select_reader_tab(id, &ctx);
         }
+        open_requested
     }
 }

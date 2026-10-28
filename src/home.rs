@@ -132,15 +132,6 @@ impl Polymath {
                             self.save_preferences();
                         }
                     }
-                    if self.active == Workspace::Reader && self.active_reader_tab().is_some() {
-                        if ui
-                            .add(egui::Button::new("Close file").frame(false))
-                            .on_hover_text("Close this Reader tab")
-                            .clicked()
-                        {
-                            self.close_reader_item(&ui.ctx().clone());
-                        }
-                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let ctx = ui.ctx().clone();
                         if crate::theme_button::show(ui, self.dark).clicked() {
@@ -316,87 +307,92 @@ impl Polymath {
     }
 
     pub(crate) fn reader_landing(&mut self, ui: &mut egui::Ui, frame: &eframe::Frame) {
-        let dark = self.dark;
-        let canvas = Color32::from_gray(if dark { 22 } else { 248 });
-        let surface = Color32::from_gray(if dark { 34 } else { 255 });
-        let ink = Color32::from_gray(if dark { 240 } else { 26 });
-        let muted = Color32::from_gray(if dark { 168 } else { 101 });
-        let line = Color32::from_gray(if dark { 61 } else { 218 });
-        let accent = if dark {
-            Color32::from_rgb(135, 188, 218)
-        } else {
-            Color32::from_rgb(42, 95, 126)
-        };
         let colors = ReaderColors {
-            dark,
-            surface,
-            ink,
-            muted,
-            line,
-            accent,
+            chrome: crate::ui_kit::chrome(self.dark),
+            accent: Workspace::Reader.accent(self.dark),
+            reduce_motion: self.home_state.reduce_motion,
         };
+        let recent: Vec<_> = self
+            .recent
+            .iter()
+            .filter(|path| Workspace::for_path(std::path::Path::new(path)).is_ok())
+            .map(|path| ReaderFile {
+                path: path.clone(),
+                page: self.reading_memory.page(path),
+                available: true,
+            })
+            .collect();
+        let favorites: Vec<_> = self
+            .reading_memory
+            .favorites()
+            .iter()
+            .map(|path| ReaderFile {
+                path: path.clone(),
+                page: self.reading_memory.page(path),
+                available: std::path::Path::new(path).is_file(),
+            })
+            .collect();
         let mut choose = false;
         let mut selected = None;
         let mut unfavorite = None;
-        let recent = self.recent.clone();
-        let favorites = self.reading_memory.favorites().to_vec();
-        let favorite_pages: Vec<_> = favorites
-            .iter()
-            .map(|path| self.reading_memory.page(path))
-            .collect();
         egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(canvas).inner_margin(30))
+            .frame(egui::Frame::new().fill(colors.chrome.canvas).inner_margin(0))
             .show(ui, |ui| {
-                ui.add_space(18.0);
-                ui.label(RichText::new("Reader").size(29.0).strong().color(ink));
-                ui.add_space(5.0);
-                ui.label(
-                    RichText::new("A place to read before you edit.")
-                        .size(13.0)
-                        .color(muted),
-                );
-                ui.add_space(24.0);
-                let available = ui.available_width().min(1000.0);
-                let primary = if available >= 740.0 {
-                    (available - 14.0) * 0.59
-                } else {
-                    available
-                };
-                let cards =
-                    |ui: &mut egui::Ui, choose: &mut bool, selected: &mut Option<String>| {
-                        reader_open_card(ui, primary, colors, choose);
-                        if available >= 740.0 {
-                            ui.add_space(14.0);
-                        } else {
-                            ui.add_space(16.0);
-                        }
-                        reader_recent_card(
-                            ui,
-                            if available >= 740.0 {
-                                available - primary - 14.0
-                            } else {
-                                available
-                            },
-                            colors,
-                            &recent,
-                            selected,
-                        );
-                    };
-                if available >= 740.0 {
-                    ui.horizontal_top(|ui| cards(ui, &mut choose, &mut selected));
-                } else {
-                    ui.vertical(|ui| cards(ui, &mut choose, &mut selected));
+                for font in ui.style_mut().text_styles.values_mut() {
+                    font.family = egui::FontFamily::Proportional;
                 }
-                ui.add_space(16.0);
-                reader_favorites_card(
-                    ui,
-                    available,
-                    colors,
-                    &favorites,
-                    &favorite_pages,
-                    &mut selected,
-                    &mut unfavorite,
-                );
+                ui.visuals_mut().override_text_color = Some(colors.chrome.ink);
+                ui.visuals_mut().weak_text_color = Some(colors.chrome.muted);
+                ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("reader-landing")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        let padding = if ui.available_width() < 760.0 { 20 } else { 30 };
+                        egui::Frame::new().inner_margin(padding).show(ui, |ui| {
+                            ui.set_max_width(1060.0);
+                            ui.set_width(ui.available_width().min(1060.0));
+                            ui.horizontal_top(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label(RichText::new("Reader").size(27.0).strong());
+                                    ui.label(RichText::new("Documents, images and media, in one place.").size(13.0).color(colors.chrome.muted));
+                                });
+                                ui.allocate_ui_with_layout(
+                                    vec2(ui.available_width(), 44.0),
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if egui_shadcn::Button::new("Open a file…")
+                                            .variant(egui_shadcn::ButtonVariant::Solid)
+                                            .min_width(138.0)
+                                            .show(ui, &crate::ui_kit::theme(self.dark, Workspace::Reader))
+                                            .on_hover_text("Open a file in Reader · ⌘O")
+                                            .clicked()
+                                        {
+                                            choose = true;
+                                        }
+                                    },
+                                );
+                            });
+                            ui.add_space(18.0);
+                            reader_open_hint(ui, colors);
+                            ui.add_space(24.0);
+                            reader_favorites(ui, colors, &favorites, &mut selected, &mut unfavorite);
+                            ui.add_space(22.0);
+                            reader_section_heading(ui, "Recent files", "clock", recent.len(), colors);
+                            ui.add_space(8.0);
+                            if recent.is_empty() {
+                                egui::Frame::new().fill(colors.chrome.surface).corner_radius(12).inner_margin(20).show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    ui.label(RichText::new("Start with a file on your Mac").size(15.0).strong());
+                                    ui.add_space(4.0);
+                                    ui.label(RichText::new("Files you open will appear here, with saved reading positions for PDFs and office documents.").size(12.5).color(colors.chrome.muted));
+                                });
+                            } else {
+                                reader_file_list(ui, colors, &recent, false, &mut selected, &mut unfavorite);
+                            }
+                            ui.add_space(16.0);
+                        });
+                    });
             });
         if let Some(path) = unfavorite {
             self.reading_memory.remove_favorite(&path);
@@ -415,227 +411,325 @@ impl Polymath {
 
 #[derive(Clone, Copy)]
 struct ReaderColors {
-    dark: bool,
-    surface: Color32,
-    ink: Color32,
-    muted: Color32,
-    line: Color32,
+    chrome: crate::ui_kit::Chrome,
     accent: Color32,
+    reduce_motion: bool,
 }
 
-fn reader_open_card(ui: &mut egui::Ui, width: f32, colors: ReaderColors, choose: &mut bool) {
-    let ReaderColors {
-        dark,
-        surface,
-        ink,
-        muted,
-        line,
-        accent,
-    } = colors;
-    let tint = if dark {
-        Color32::from_rgb(31, 48, 59)
-    } else {
-        Color32::from_rgb(231, 241, 246)
-    };
+struct ReaderFile {
+    path: String,
+    page: Option<usize>,
+    available: bool,
+}
+
+fn reader_open_hint(ui: &mut egui::Ui, colors: ReaderColors) {
+    let tint = colors.chrome.surface.lerp_to_gamma(colors.accent, 0.09);
     egui::Frame::new()
         .fill(tint)
-        .stroke(Stroke::new(1.0, line))
-        .corner_radius(14)
-        .inner_margin(22)
+        .corner_radius(12)
+        .inner_margin(16)
         .show(ui, |ui| {
-            ui.set_width(width - 44.0);
-            ui.vertical(|ui| {
-                ui.set_min_height(213.0);
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
                 ui.add(
                     egui::Image::new(Workspace::Reader.icon())
-                        .fit_to_exact_size(vec2(32.0, 32.0))
-                        .tint(accent),
+                        .fit_to_exact_size(vec2(27.0, 27.0))
+                        .tint(colors.accent),
                 );
-                ui.add_space(14.0);
-                ui.label(
-                    RichText::new("Open a file to preview")
-                        .size(18.0)
-                        .strong()
-                        .color(ink),
-                );
-                ui.add_space(5.0);
-                ui.label(
-                    RichText::new("PDF, Word, Excel, PowerPoint, Markdown and source code.")
-                        .size(12.0)
-                        .color(muted),
-                );
-                ui.add_space(17.0);
-                if ui
-                    .add(
-                        egui::Button::new(RichText::new("Choose a file…").color(surface))
-                            .fill(ink)
-                            .stroke(Stroke::NONE)
-                            .min_size(vec2(145.0, 37.0)),
-                    )
-                    .clicked()
-                {
-                    *choose = true;
-                }
-            });
-        });
-}
-
-fn reader_recent_card(
-    ui: &mut egui::Ui,
-    width: f32,
-    colors: ReaderColors,
-    recent: &[String],
-    selected: &mut Option<String>,
-) {
-    let ReaderColors {
-        surface,
-        ink,
-        muted,
-        line,
-        ..
-    } = colors;
-    egui::Frame::new()
-        .fill(surface)
-        .stroke(Stroke::new(1.0, line))
-        .corner_radius(14)
-        .inner_margin(20)
-        .show(ui, |ui| {
-            ui.set_width((width - 40.0).max(150.0));
-            ui.vertical(|ui| {
-                ui.set_min_height(217.0);
-                ui.label(
-                    RichText::new("Recently opened")
-                        .size(15.0)
-                        .strong()
-                        .color(ink),
-                );
-                ui.add_space(11.0);
-                let files: Vec<_> = recent
-                    .iter()
-                    .filter(|path| {
-                        Workspace::for_path(std::path::Path::new(path)).ok()
-                            != Some(Workspace::Images)
-                    })
-                    .take(4)
-                    .collect();
-                if files.is_empty() {
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
                     ui.label(
-                        RichText::new("Your reading list will appear here after you open a file.")
-                            .size(12.0)
-                            .color(muted),
+                        RichText::new("Drop a file here to open it")
+                            .size(14.0)
+                            .strong()
+                            .color(colors.chrome.ink),
                     );
-                }
-                for path in files {
-                    let name = std::path::Path::new(path)
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or(path);
-                    let response = ui
-                        .add_sized(
-                            [ui.available_width(), 34.0],
-                            egui::Button::new(RichText::new(name).size(12.0)).frame(false),
+                    ui.label(
+                        RichText::new(
+                            "PDF and office files · Text and code · Images, audio and video",
                         )
-                        .on_hover_text(path);
-                    if response.clicked() {
-                        *selected = Some(path.clone());
-                    }
-                    ui.separator();
-                }
+                        .size(12.0)
+                        .color(colors.chrome.muted),
+                    );
+                });
             });
         });
 }
 
-fn reader_favorites_card(
+fn reader_section_heading(
     ui: &mut egui::Ui,
-    width: f32,
+    title: &str,
+    icon: &str,
+    count: usize,
     colors: ReaderColors,
-    favorites: &[String],
-    pages: &[Option<usize>],
+) {
+    ui.horizontal(|ui| {
+        ui.add(pdfcraft_ui_egui::icons::image(
+            icon,
+            17.0,
+            colors.chrome.muted,
+        ));
+        ui.label(
+            RichText::new(title)
+                .size(16.0)
+                .strong()
+                .color(colors.chrome.ink),
+        );
+        if count > 0 {
+            ui.label(
+                RichText::new(count.to_string())
+                    .size(12.0)
+                    .color(colors.chrome.muted),
+            );
+        }
+    });
+}
+
+fn reader_favorites(
+    ui: &mut egui::Ui,
+    colors: ReaderColors,
+    favorites: &[ReaderFile],
+    selected: &mut Option<String>,
+    unfavorite: &mut Option<String>,
+) {
+    if favorites.is_empty() {
+        // A compact inline explanation, without reserving a panel for nonexistent files.
+        ui.horizontal(|ui| {
+            ui.add(pdfcraft_ui_egui::icons::image("star", 18.0, colors.accent));
+            ui.add_space(2.0);
+            ui.label(
+                RichText::new("Favorites")
+                    .size(13.0)
+                    .strong()
+                    .color(colors.chrome.ink),
+            );
+            ui.add(
+                egui::Label::new(
+                    RichText::new("Use the star on an open file to keep it here.")
+                        .size(12.0)
+                        .color(colors.chrome.muted),
+                )
+                .wrap(),
+            );
+        });
+        return;
+    }
+    reader_section_heading(ui, "Favorites", "star", favorites.len(), colors);
+    ui.add_space(8.0);
+    egui::ScrollArea::vertical()
+        .id_salt("reader-favorites")
+        .max_height(264.0)
+        .show(ui, |ui| {
+            reader_file_list(ui, colors, favorites, true, selected, unfavorite);
+        });
+}
+
+fn reader_file_list(
+    ui: &mut egui::Ui,
+    colors: ReaderColors,
+    files: &[ReaderFile],
+    favorites: bool,
     selected: &mut Option<String>,
     unfavorite: &mut Option<String>,
 ) {
     egui::Frame::new()
-        .fill(colors.surface)
-        .stroke(Stroke::new(1.0, colors.line))
-        .corner_radius(14)
-        .inner_margin(20)
+        .fill(colors.chrome.surface)
+        .stroke(Stroke::new(1.0, colors.chrome.line))
+        .corner_radius(12)
+        .inner_margin(5)
         .show(ui, |ui| {
-            ui.set_width((width - 40.0).max(150.0));
-            ui.horizontal_centered(|ui| {
-                let star = pdfcraft_ui_egui::icons::image("star", 19.0, colors.accent)
-                    .alt_text("Favorites");
-                ui.add(star);
-                ui.label(
-                    RichText::new("Favorites")
-                        .size(15.0)
-                        .strong()
-                        .color(colors.ink),
-                );
-                if !favorites.is_empty() {
-                    ui.label(
-                        RichText::new(favorites.len().to_string())
-                            .size(11.0)
-                            .color(colors.muted),
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for (index, file) in files.iter().enumerate() {
+                ui.push_id((&file.path, favorites), |ui| {
+                    reader_file_row(ui, colors, file, favorites, selected, unfavorite);
+                });
+                if index + 1 < files.len() {
+                    let x = ui.max_rect().x_range();
+                    ui.painter().hline(
+                        (x.min + 48.0)..=(x.max - 10.0),
+                        ui.cursor().top(),
+                        Stroke::new(0.5, colors.chrome.line),
                     );
                 }
-            });
-            ui.add_space(6.0);
-            if favorites.is_empty() {
-                ui.label(
-                    RichText::new(
-                        "Save files you return to. Use the star in Reader while a file is open.",
-                    )
-                    .size(12.0)
-                    .color(colors.muted),
-                );
-                return;
             }
-            egui::ScrollArea::vertical()
-                .id_salt("reader-favorites")
-                .max_height(270.0)
-                .show(ui, |ui| {
-                    for (index, path) in favorites.iter().enumerate() {
-                        let name = std::path::Path::new(path)
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or(path);
-                        let available = std::path::Path::new(path).is_file();
-                        let detail = if !available {
-                            "File unavailable".to_owned()
-                        } else if let Some(Some(page)) = pages.get(index) {
-                            format!("Continue at page {}", page + 1)
-                        } else {
-                            "Open in Reader".to_owned()
-                        };
-                        ui.horizontal_centered(|ui| {
-                            let button = egui::Button::new(format!("{name}  ·  {detail}"))
-                                .frame(false)
-                                .min_size(vec2((ui.available_width() - 45.0).max(120.0), 34.0));
-                            if ui
-                                .add_enabled(available, button)
-                                .on_hover_text(path)
-                                .clicked()
-                            {
-                                *selected = Some(path.clone());
-                            }
-                            let remove = pdfcraft_ui_egui::icons::image("x", 16.0, colors.muted)
-                                .alt_text("Remove favorite");
-                            if ui
-                                .add(
-                                    egui::Button::image(remove)
-                                        .frame(false)
-                                        .min_size(vec2(30.0, 30.0)),
-                                )
-                                .on_hover_text(format!("Remove {name} from Favorites"))
-                                .clicked()
-                            {
-                                *unfavorite = Some(path.clone());
-                            }
-                        });
-                        if index + 1 < favorites.len() {
-                            ui.separator();
-                        }
-                    }
-                });
         });
+}
+
+fn reader_file_row(
+    ui: &mut egui::Ui,
+    colors: ReaderColors,
+    file: &ReaderFile,
+    favorite: bool,
+    selected: &mut Option<String>,
+    unfavorite: &mut Option<String>,
+) {
+    let path = std::path::Path::new(&file.path);
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&file.path);
+    let parent = path
+        .parent()
+        .map(|parent| parent.to_string_lossy())
+        .unwrap_or_default();
+    let kind = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("File")
+        .to_ascii_uppercase();
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 62.0), egui::Sense::hover());
+    let open_rect = egui::Rect::from_min_max(
+        rect.min,
+        egui::pos2(
+            rect.right() - if favorite { 40.0 } else { 0.0 },
+            rect.bottom(),
+        ),
+    );
+    let response = ui.interact(
+        open_rect,
+        ui.id().with("open"),
+        if file.available {
+            egui::Sense::click()
+        } else {
+            egui::Sense::hover()
+        },
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::WidgetType::Button,
+            file.available && ui.is_enabled(),
+            name,
+        )
+    });
+    reader_reveal_focus(&response, colors.reduce_motion);
+    if file.available && (response.hovered() || response.has_focus()) {
+        ui.painter().rect_filled(open_rect, 8, colors.chrome.hover);
+    }
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            open_rect.shrink(1.0),
+            8,
+            Stroke::new(1.5, colors.accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let ink = if file.available {
+        colors.chrome.ink
+    } else {
+        colors.chrome.muted
+    };
+    let workspace = Workspace::for_path(path).unwrap_or(Workspace::Reader);
+    egui::Image::new(workspace.icon())
+        .fit_to_exact_size(vec2(22.0, 22.0))
+        .tint(colors.accent)
+        .paint_at(
+            ui,
+            egui::Rect::from_center_size(
+                open_rect.left_center() + vec2(25.0, 0.0),
+                vec2(22.0, 22.0),
+            ),
+        );
+    let detail = if file.available {
+        parent.as_ref()
+    } else {
+        "File unavailable"
+    };
+    let text_width = (open_rect.width() - 166.0).max(70.0);
+    reader_row_text(
+        ui,
+        open_rect.min + vec2(48.0, 11.0),
+        name,
+        13.0,
+        ink,
+        text_width,
+    );
+    reader_row_text(
+        ui,
+        open_rect.min + vec2(48.0, 33.0),
+        detail,
+        11.5,
+        colors.chrome.muted,
+        text_width,
+    );
+    ui.painter().text(
+        open_rect.right_top() + vec2(-12.0, 14.0),
+        egui::Align2::RIGHT_TOP,
+        kind,
+        egui::FontId::proportional(11.0),
+        colors.chrome.muted,
+    );
+    if file.available
+        && let Some(page) = file.page
+    {
+        ui.painter().text(
+            open_rect.right_bottom() - vec2(12.0, 12.0),
+            egui::Align2::RIGHT_BOTTOM,
+            format!("Page {}", page + 1),
+            egui::FontId::proportional(11.5),
+            colors.accent,
+        );
+    }
+    if response.clicked() {
+        *selected = Some(file.path.clone());
+    }
+    response
+        .on_hover_text(&file.path)
+        .on_hover_cursor(if file.available {
+            egui::CursorIcon::PointingHand
+        } else {
+            egui::CursorIcon::Default
+        });
+    if favorite {
+        let remove_rect =
+            egui::Rect::from_center_size(rect.right_center() - vec2(20.0, 0.0), vec2(34.0, 34.0));
+        let label = format!("Remove {name} from Favorites");
+        let remove = ui
+            .put(
+                remove_rect,
+                egui::Button::image(
+                    pdfcraft_ui_egui::icons::image("x", 15.0, colors.chrome.muted).alt_text(&label),
+                )
+                .frame(false)
+                .corner_radius(8),
+            )
+            .on_hover_text(label);
+        reader_reveal_focus(&remove, colors.reduce_motion);
+        if remove.clicked() {
+            *unfavorite = Some(file.path.clone());
+        }
+    }
+}
+
+fn reader_reveal_focus(response: &egui::Response, reduce_motion: bool) {
+    if response.gained_focus() {
+        if reduce_motion {
+            response.scroll_to_me_animation(
+                Some(egui::Align::Center),
+                egui::style::ScrollAnimation::none(),
+            );
+        } else {
+            response.scroll_to_me(Some(egui::Align::Center));
+        }
+    }
+}
+
+fn reader_row_text(
+    ui: &egui::Ui,
+    pos: egui::Pos2,
+    text: &str,
+    size: f32,
+    color: Color32,
+    width: f32,
+) {
+    let mut job = egui::text::LayoutJob::simple_singleline(
+        text.into(),
+        egui::FontId::proportional(size),
+        color,
+    );
+    job.wrap.max_width = width;
+    job.wrap.max_rows = 1;
+    job.wrap.break_anywhere = true;
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    ui.painter().galley(pos, galley, color);
 }

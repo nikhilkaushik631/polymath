@@ -1016,16 +1016,16 @@ impl eframe::App for Polymath {
         if !full_screen {
             self.bar(ui, frame);
             if self.active == Workspace::Reader {
-                self.reader_tabs_ui(ui);
+                if self.reader_tabs_ui(ui) {
+                    self.pick(false, frame, &ui.ctx().clone());
+                }
             }
         }
         ui.push_id(self.active.label(), |ui| match self.active {
             Workspace::Home => self.home(ui, frame),
             Workspace::Reader if self.source.is_some() => {
-                if let Some(source) = &mut self.source
-                    && source_view::show(ui, source, self.dark)
-                {
-                    self.pick(false, frame, &ui.ctx().clone());
+                if let Some(source) = &mut self.source {
+                    source_view::show(ui, source, self.dark);
                 }
             }
             Workspace::Reader if self.media.is_some() => {
