@@ -298,7 +298,7 @@ impl Polymath {
                 self.listing.refresh();
                 Ok(())
             }
-            Some(home_view::Action::Open(path)) => self.open(&path, &ctx).map(|_| ()),
+            Some(home_view::Action::Open(path)) => self.open_recent_or_prune(&path, &ctx),
             None => Ok(()),
         };
         if let Err(error) = result {
@@ -400,7 +400,7 @@ impl Polymath {
             self.pick(false, frame, &ui.ctx().clone());
         }
         if let Some(path) = selected
-            && let Err(error) = self.open_in_reader(&path, &ui.ctx().clone())
+            && let Err(error) = self.open_recent_or_prune(&path, &ui.ctx().clone())
         {
             self.notice = Some(error);
         }

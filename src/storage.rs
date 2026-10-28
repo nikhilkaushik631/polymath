@@ -1,6 +1,10 @@
 use crate::Polymath;
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Write, path::PathBuf};
+use std::{
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+};
 #[derive(Default, Serialize, Deserialize)]
 #[serde(default)]
 struct Preferences {
@@ -32,6 +36,23 @@ fn path() -> Option<PathBuf> {
         .map(|h| PathBuf::from(h).join("Library/Application Support/Polymath/preferences.json"))
 }
 impl Polymath {
+    /// Remove paths that no longer name files from every Recent list. Favorites
+    /// stay separate so an offline volume can be reconnected later.
+    pub(crate) fn prune_missing_recent(&mut self) -> bool {
+        let mut changed = false;
+        let mut keep = |path: &str| {
+            let exists = Path::new(path).is_file();
+            changed |= !exists;
+            exists
+        };
+        self.recent.retain(|path| keep(path));
+        self.reader.recent.retain(|file| keep(&file.path));
+        self.writer.ui.recent.retain(|path| keep(path));
+        self.sheets.ui.recent.retain(|path| keep(path));
+        self.slides.ui.recent.retain(|path| keep(path));
+        changed
+    }
+
     pub(crate) fn load_preferences(&mut self) {
         let Some(path) = path() else {
             return;

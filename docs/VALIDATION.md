@@ -1,4 +1,16 @@
-# Local validation — Polymath 0.4.15, 2026-10-28
+# Local validation — Polymath 0.4.16, 2026-10-28
+
+Recent files are checked on launch and at most once every three seconds when the UI updates. Paths that no longer point to files are removed from Home, Reader, and the Reader/Writer/Sheets/Slides editor histories, then the cleaned lists are saved. Clicking a stale Recent row before the next check removes it without a file-not-found popup. Favorites are kept separately so an unavailable volume can be reconnected without losing pins. Open Reader tabs and document data are not changed.
+
+The focused Rust regression tests passed for silent removal across every Recent history and for the existing missing-file open path. A native test with isolated preferences passed both launch-time cleanup and removal after a file was moved while Polymath was running; the updated preferences file contained no stale entry.
+
+The locked optimized build, formatting, Python syntax and whitespace checks passed. The signed 0.4.16 bundle passed the native Recent cleanup test and the app-wide smoke test; the DMG passed `hdiutil verify`. The 0.4.15 app and installer are archived under `../installers/previous-versions/`. `/Applications/Polymath.app` is running 0.4.16 with an executable hash matching the signed bundle. Its actual saved preferences now have zero missing paths in Home/Reader, Writer, Sheets and Slides Recent histories. A fresh Launch Services check confirmed all 119 configured document extensions still resolve to the installed app. The installer copy in `../installers/Polymath.dmg` matches `dist/Polymath.dmg`.
+
+Installed and signed-bundle executable SHA-256: `3909bd33593d587378be2f21ed9a54c3d2b9b354a77aabc5199924b1e525f321`
+
+DMG SHA-256: `13577d941bbb55336f3b319b836f1f8104b4827d4a19e17dd4107d0171bd6c63`
+
+## Previous Polymath 0.4.15 validation — 2026-10-28
 
 Polymath 0.4.15 is an app-wide native UI audit. Home now reveals keyboard-focused actions and keeps long folder names compact; Reduce motion also stops animated focus scrolling. Settings has a bounded, scrollable dialog with shared typography, reachable folder removal and accurate file-handling and narration states. Reader's landing page uses the full window width. Its active file tab scrolls into view, SVG source and output remain side by side, CSV search says “Filter rows,” and PDF Tools names its complete sidebar “Tool catalog.” The image viewer starts at the image instead of repeating the tab filename, and compact windows reserve space for wrapped controls.
 

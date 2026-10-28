@@ -69,6 +69,7 @@ struct Polymath {
     next: Option<Workspace>,
     dark: bool,
     recent: Vec<String>,
+    recent_checked_at: Instant,
     reading_memory: reader_memory::ReaderMemory,
     reading_memory_dirty: bool,
     reading_memory_saved_at: Instant,
@@ -172,6 +173,7 @@ impl Polymath {
             next: None,
             dark: false,
             recent: vec![],
+            recent_checked_at: Instant::now(),
             reading_memory: reader_memory::ReaderMemory::default(),
             reading_memory_dirty: false,
             reading_memory_saved_at: Instant::now(),
@@ -223,7 +225,11 @@ impl Polymath {
                 }
             }
         }
+        let recent_pruned = app.prune_missing_recent();
         app.sync_editor_recent(false);
+        if recent_pruned {
+            app.save_preferences();
+        }
         app.apply_theme();
         app.home_theme(ctx);
         app
@@ -425,6 +431,16 @@ impl Polymath {
     fn open(&mut self, path: &str, ctx: &egui::Context) -> Result<Value, String> {
         // Every ordinary open enters a visible Reader tab. Editing is an explicit handoff.
         self.open_in_reader(path, ctx)
+    }
+    fn open_recent_or_prune(&mut self, path: &str, ctx: &egui::Context) -> Result<(), String> {
+        if self.recent.iter().any(|recent| recent == path) && !Path::new(path).is_file() {
+            if self.prune_missing_recent() {
+                self.sync_editor_recent(false);
+                self.save_preferences();
+            }
+            return Ok(());
+        }
+        self.open(path, ctx).map(|_| ())
     }
     fn open_for_edit(&mut self, path: &str, ctx: &egui::Context) -> Result<Value, String> {
         if workspace::is_video_path(Path::new(path)) {
@@ -946,6 +962,15 @@ impl eframe::App for Polymath {
             self.reading_memory_saved_at = Instant::now();
         }
         self.sync_editor_recent(true);
+        if self.recent_checked_at.elapsed().as_secs() >= 3 {
+            self.recent_checked_at = Instant::now();
+            if self.prune_missing_recent() {
+                // Keep the editor history snapshots aligned so an old entry
+                // cannot be promoted as fresh activity on the next frame.
+                self.sync_editor_recent(false);
+                self.save_preferences();
+            }
+        }
         if let Some(path) = self.video_editor.take_exported_path()
             && let Some(path) = path.to_str()
         {
@@ -1350,6 +1375,35 @@ mod tests {
         app.recent.push(path.clone());
         assert!(app.open(&path, &ctx).is_err());
         assert!(!app.recent.contains(&path));
+    }
+    #[test]
+    fn missing_recent_click_silently_prunes_every_history() {
+        let ctx = egui::Context::default();
+        let mut app = app(&ctx);
+        let missing = format!("/missing/polymath-{}-moved.pdf", std::process::id());
+        let existing =
+            std::env::temp_dir().join(format!("polymath-recent-existing-{}", std::process::id()));
+        std::fs::write(&existing, b"file").expect("create existing file");
+        let existing = existing.to_string_lossy().into_owned();
+        app.recent.extend([missing.clone(), existing.clone()]);
+        app.reader.recent.push(pdfcraft_ui_egui::RecentFile {
+            name: "moved.pdf".into(),
+            path: missing.clone(),
+            pages: 1,
+            size: 0,
+        });
+        app.writer.ui.recent.push(missing.clone());
+        app.sheets.ui.recent.push(missing.clone());
+        app.slides.ui.recent.push(missing.clone());
+
+        assert!(app.open_recent_or_prune(&missing, &ctx).is_ok());
+        assert_eq!(app.recent, [existing.clone()]);
+        assert!(app.reader.recent.is_empty());
+        assert!(app.writer.ui.recent.is_empty());
+        assert!(app.sheets.ui.recent.is_empty());
+        assert!(app.slides.ui.recent.is_empty());
+        assert!(app.notice.is_none());
+        std::fs::remove_file(existing).expect("remove existing file");
     }
     #[test]
     fn reader_selects_remaining_preview_after_confirmed_pdf_close() {
