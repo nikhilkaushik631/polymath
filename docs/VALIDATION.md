@@ -1,4 +1,20 @@
-# Local validation — Polymath 0.4.14, 2026-10-28
+# Local validation — Polymath 0.4.15, 2026-10-28
+
+Polymath 0.4.15 is an app-wide native UI audit. Home now reveals keyboard-focused actions and keeps long folder names compact; Reduce motion also stops animated focus scrolling. Settings has a bounded, scrollable dialog with shared typography, reachable folder removal and accurate file-handling and narration states. Reader's landing page uses the full window width. Its active file tab scrolls into view, SVG source and output remain side by side, CSV search says “Filter rows,” and PDF Tools names its complete sidebar “Tool catalog.” The image viewer starts at the image instead of repeating the tab filename, and compact windows reserve space for wrapped controls.
+
+Video removes the duplicate Now Playing heading and codec footer, uses more of the available height at the source aspect ratio, and keeps its seek, centered transport, time and volume visible. Full-screen and Fit are named icon actions; Fit appears only after zooming. The separate Video timeline also hides its Fit action until zoomed. Embedded Sheets and Slides no longer repeat the host Home button; Slides ribbon groups can scroll when the window is narrow. An empty Images library no longer shows an empty filmstrip or photo-only footer controls. Writer retained its existing editing ribbon and Save As action after visual review.
+
+The locked debug build and native Reader visual QA passed. Light and dark captures show the full-width landing page, overflow tabs, source/SVG previews, and a 1280 × 800 synthetic video in normal and full-screen playback. The `reader-source-last-line.png` capture shows JSX line 75 fully visible at the bottom, addressing the reported blank lower viewport. Native smoke passed routing, previews, workspace switching, save/reopen and the unsaved-change guard with screenshots. The Home UI suite passed 12 tests, and the Settings gear regression passed. A focused new Images empty-library capture confirmed only library navigation remains in its footer. The signed bundle also passed Video Studio's trim, reorder, merge, audio and export end-to-end test. No personal media files were modified by these checks.
+
+`tests/reader_resource_probe.py` opened 15 synthetic 400-line JSX files, 15 copies of a 243 KB PDF and one paused 4 MB video in the signed app. An isolated second run reported a macOS physical footprint of 203 MiB with Reader empty, 197 MiB with 15 source tabs, 203 MiB with 30 document tabs, and 207 MiB with the video tab. After closing the PDF and video tabs and idling for 20 seconds, it was 197 MiB at 0% sampled CPU. A first run shortly after launch and tab changes showed 237–306 MiB and 62–84% sampled CPU. macOS memory compression, rendering state and recent activity make these snapshots variable; they do not establish a fixed cost per tab or foreground playback load.
+
+The final locked optimized build, Rust formatting, Python syntax and whitespace checks passed. Native Reader visual QA and the full native smoke test passed again on the final signed bundle. The final DMG passed `hdiutil verify`; `dist/Polymath.dmg` matches `../installers/Polymath.dmg`. The previous 0.4.14 app and DMG are archived under `../installers/previous-versions/`. `/Applications/Polymath.app` was installed and launched as 0.4.15; its executable hash matches the tested bundle. A fresh Launch Services check confirmed all 119 configured document extensions resolve to the installed app, while HTTP/HTTPS remain with the browser. The app is ad-hoc signed and is not Apple-notarized.
+
+Installed and signed-bundle executable SHA-256: `d5ed2891a73e6830fd8ee70d166f4fa9874757b45d2cc2c9c458cbff6e29fcfc`
+
+DMG SHA-256: `26c087817db8b79aff729488b3a01bff10d183630393ee139cde2b0f811287ae`
+
+## Previous Polymath 0.4.14 validation — 2026-10-28
 
 Polymath 0.4.14 replaces the two stacked Reader source bars with one integrated file strip at normal window widths. The active file uses a flat editor tab with a Reader-blue underline; file type, line count, read-only hint, Find, Copy and Outline sit immediately beside the tabs. A narrow window retains a compact secondary row so the tabs and actions remain reachable. The source and rendered SVG preview now begin directly below the shared strip.
 

@@ -703,7 +703,7 @@ impl VideoEditor {
                         let heading = |ui: &mut egui::Ui| {
                             ui.vertical(|ui| {
                                 ui.label(
-                                    egui::RichText::new("POLYMATH  /  VIDEO STUDIO")
+                                    egui::RichText::new("VIDEO STUDIO")
                                         .size(10.0)
                                         .strong()
                                         .color(p.accent),
@@ -1474,17 +1474,33 @@ impl VideoEditor {
                             self.timeline_auto_fit = false;
                             self.timeline_scale = (self.timeline_scale / 1.3).max(0.01);
                         }
-                        if Button::new("Fit")
-                            .variant(ButtonVariant::Ghost)
-                            .size(ButtonSize::Sm)
-                            .radius(ButtonRadius::Medium)
-                            .show(ui, theme)
-                            .on_hover_text("Fit entire timeline")
-                            .clicked()
-                        {
-                            self.timeline_auto_fit = true;
-                            self.timeline_scale =
-                                fit_timeline_scale(&self.clips, timeline_viewport_width);
+                        if !self.timeline_auto_fit {
+                            let fit_icon = |p: &egui::Painter, center, _, color| {
+                                let stroke = Stroke::new(1.7, color);
+                                p.rect_stroke(
+                                    Rect::from_center_size(center, vec2(17.0, 13.0)),
+                                    2.0,
+                                    stroke,
+                                    egui::StrokeKind::Inside,
+                                );
+                                p.line_segment(
+                                    [center + vec2(-3.0, 0.0), center + vec2(3.0, 0.0)],
+                                    stroke,
+                                );
+                            };
+                            if Button::new("Fit entire timeline")
+                                .variant(ButtonVariant::Ghost)
+                                .size(ButtonSize::IconSm)
+                                .radius(ButtonRadius::Medium)
+                                .icon(&fit_icon)
+                                .show(ui, theme)
+                                .on_hover_text("Fit entire timeline")
+                                .clicked()
+                            {
+                                self.timeline_auto_fit = true;
+                                self.timeline_scale =
+                                    fit_timeline_scale(&self.clips, timeline_viewport_width);
+                            }
                         }
                     });
                 });

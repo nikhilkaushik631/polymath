@@ -201,7 +201,7 @@ fn layout_home_light_dark_empty_and_populated_at_desktop_and_minimum_width() {
                     );
                     for label in [
                         "All files",
-                        "PDF + code",
+                        "Reader files",
                         "Documents",
                         "Spreadsheets",
                         "Presentations",
@@ -295,7 +295,7 @@ fn search_and_type_filters_update_visible_files_and_can_be_cleared() {
     assert!(button_present(&harness, "Roadmap.docx"));
     assert!(button_present(&harness, "Budget.xlsx"));
 
-    click(&mut harness, "PDF + code");
+    click(&mut harness, "Reader files");
     assert!(button_present(&harness, "Reference.pdf"));
     assert!(!button_present(&harness, "Roadmap.docx"));
     click(&mut harness, "Pictures");
@@ -443,5 +443,36 @@ fn keyboard_focus_reveals_a_file_below_the_fold_in_both_motion_modes() {
             harness.state().actions,
             [Action::Open(format!("{ROOT}/Recent work/Reference.pdf"))]
         );
+    }
+}
+
+#[test]
+fn keyboard_focus_returns_to_open_and_reveals_library_controls() {
+    for reduce_motion in [false, true] {
+        let mut fixture = HomeFixture::populated(false);
+        fixture.home.reduce_motion = reduce_motion;
+        let mut harness = harness(vec2(784.0, 472.0), fixture);
+        // Move far down the page first, then revisit the header and the file controls.
+        for label in [
+            "Reference.pdf",
+            "Open a file",
+            "Spreadsheets",
+            "+ Add folder",
+        ] {
+            harness.get_by_role_and_label(Role::Button, label).focus();
+            harness.run_steps(if reduce_motion { 3 } else { 30 });
+            let rect = harness.get_by_role_and_label(Role::Button, label).rect();
+            assert!(
+                rect.min.y >= 0.0 && rect.max.y <= 472.0,
+                "Focused {label} must stay visible: {rect:?}"
+            );
+        }
+        let name = "Reports and supporting documents with a very long folder name";
+        let rect = harness.get_by_role_and_label(Role::Button, name).rect();
+        assert!(
+            rect.width() <= 241.0,
+            "Long folder selector must stay compact: {rect:?}"
+        );
+        assert!(harness.state().actions.is_empty());
     }
 }

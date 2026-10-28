@@ -11,7 +11,7 @@ fixtures={'reader':('reader','target/interface-scale/bookmarks.pdf'),'writer':('
 for workspace,(repo,relative) in fixtures.items():
  source=ROOT.parent/repo/relative;destination=out/(workspace+source.suffix);shutil.copyfile(source,destination);fixtures[workspace]=destination
 log=(out/'app.log').open('w');env=os.environ.copy();env.update(POLYMATH_NO_PREFS='1',PDFCRAFT_SYSTEM_FONTS='0')
-binary=ROOT/'dist/Polymath.app/Contents/MacOS/Polymath'
+binary=Path(os.environ['POLYMATH_QA_BINARY']) if os.environ.get('POLYMATH_QA_BINARY') else ROOT/'dist/Polymath.app/Contents/MacOS/Polymath'
 if not binary.is_file():binary=ROOT.parent/'reader/target/release/polymath'
 process=subprocess.Popen([str(binary),'--control',str(endpoint)],stdout=log,stderr=log,env=env)
 def call(method,params=None):return bridge.request(endpoint,method,params)

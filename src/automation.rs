@@ -170,6 +170,25 @@ impl Polymath {
                 _ => control::error("Open an image in Reader first"),
             },
             "app.reader.tabs" => control::ok(self.reader_tabs_json()),
+            "app.source.goto" => match (
+                self.active == Workspace::Reader,
+                self.source.as_mut(),
+                p.get("line")
+                    .and_then(Value::as_u64)
+                    .and_then(|line| usize::try_from(line).ok()),
+            ) {
+                (true, Some(source), Some(line)) => match source.go_to_line(line) {
+                    Ok(()) => {
+                        ctx.request_repaint();
+                        control::ok(
+                            json!({"path":source.path,"line":line,"lines":source.line_count()}),
+                        )
+                    }
+                    Err(error) => control::error(error),
+                },
+                (true, Some(_), None) => control::error("line must be a one-based integer"),
+                _ => control::error("Open a source file in Reader first"),
+            },
             "app.reader.select" => match p
                 .get("id")
                 .and_then(Value::as_str)

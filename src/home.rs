@@ -315,7 +315,6 @@ impl Polymath {
         let recent: Vec<_> = self
             .recent
             .iter()
-            .filter(|path| Workspace::for_path(std::path::Path::new(path)).is_ok())
             .map(|path| ReaderFile {
                 path: path.clone(),
                 page: self.reading_memory.page(path),
@@ -350,8 +349,7 @@ impl Polymath {
                     .show(ui, |ui| {
                         let padding = if ui.available_width() < 760.0 { 20 } else { 30 };
                         egui::Frame::new().inner_margin(padding).show(ui, |ui| {
-                            ui.set_max_width(1060.0);
-                            ui.set_width(ui.available_width().min(1060.0));
+                            ui.set_width(ui.available_width());
                             ui.horizontal_top(|ui| {
                                 ui.vertical(|ui| {
                                     ui.label(RichText::new("Reader").size(27.0).strong());
@@ -361,13 +359,13 @@ impl Polymath {
                                     vec2(ui.available_width(), 44.0),
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        if egui_shadcn::Button::new("Open a file…")
+                                        let open = egui_shadcn::Button::new("Open a file…")
                                             .variant(egui_shadcn::ButtonVariant::Solid)
                                             .min_width(138.0)
                                             .show(ui, &crate::ui_kit::theme(self.dark, Workspace::Reader))
-                                            .on_hover_text("Open a file in Reader · ⌘O")
-                                            .clicked()
-                                        {
+                                            .on_hover_text("Open a file in Reader · ⌘O");
+                                        reader_reveal_focus(&open, colors.reduce_motion);
+                                        if open.clicked() {
                                             choose = true;
                                         }
                                     },
@@ -685,7 +683,7 @@ fn reader_file_row(
             egui::Rect::from_center_size(rect.right_center() - vec2(20.0, 0.0), vec2(34.0, 34.0));
         let label = format!("Remove {name} from Favorites");
         let remove = ui
-            .put(
+            .place(
                 remove_rect,
                 egui::Button::image(
                     pdfcraft_ui_egui::icons::image("x", 15.0, colors.chrome.muted).alt_text(&label),

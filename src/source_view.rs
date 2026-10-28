@@ -118,6 +118,15 @@ impl SourceFile {
     pub fn line_count(&self) -> usize {
         self.lines.len()
     }
+
+    /// Queue a read-only jump for the next rendered frame. Lines are one-based.
+    pub(crate) fn go_to_line(&mut self, line: usize) -> Result<(), String> {
+        if line == 0 || line > self.lines.len() {
+            return Err(format!("line must be between 1 and {}", self.lines.len()));
+        }
+        self.jump_to_line = Some(line - 1);
+        Ok(())
+    }
 }
 
 impl DelimitedTable {
@@ -736,11 +745,16 @@ impl SourceViewer<'_> {
 fn source_actions(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool, search_width: f32) {
     let theme = crate::ui_kit::theme(dark, crate::Workspace::Reader);
     let chrome = crate::ui_kit::chrome(dark);
+    let placeholder = if file.table.is_some() {
+        "Filter rows"
+    } else {
+        "Find in file"
+    };
     egui_shadcn::input_with_props(
         ui,
         &theme,
         egui_shadcn::InputProps::new("source-find", &mut file.query)
-            .placeholder("Find in file")
+            .placeholder(placeholder)
             .width(search_width),
     );
     let copy = ui.add(
@@ -816,5 +830,18 @@ mod tests {
         assert_eq!(table.visible_rows, [1]);
         table.filter("");
         assert_eq!(table.visible_rows, [0, 1]);
+    }
+
+    #[test]
+    fn source_jump_accepts_last_line_and_rejects_out_of_range() {
+        let path =
+            std::env::temp_dir().join(format!("polymath-source-jump-{}.txt", std::process::id()));
+        std::fs::write(&path, "first\nsecond\nlast").expect("write source fixture");
+        let mut source = SourceFile::load(&path).expect("load source fixture");
+        assert_eq!(source.go_to_line(3), Ok(()));
+        assert_eq!(source.jump_to_line, Some(2));
+        assert!(source.go_to_line(0).is_err());
+        assert!(source.go_to_line(4).is_err());
+        std::fs::remove_file(path).expect("remove source fixture");
     }
 }

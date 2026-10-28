@@ -147,9 +147,11 @@ impl Polymath {
         let mut sheets =
             gridcraft_ui_egui::SheetApp::new(gridcraft_engine::Session::new(), services::sheets());
         sheets.host_external_links = true;
+        sheets.embedded_host = true;
         let mut slides =
             deckcraft_ui_egui::SlideApp::new(deckcraft_engine::Session::new(), services::slides());
         slides.host_external_links = true;
+        slides.embedded_host = true;
         let mut app = Self {
             reader,
             source: None,

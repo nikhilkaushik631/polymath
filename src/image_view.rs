@@ -156,11 +156,6 @@ impl ImageView {
         } else {
             Color32::from_rgb(102, 108, 115)
         };
-        let accent = if dark {
-            Color32::from_rgb(137, 199, 225)
-        } else {
-            Color32::from_rgb(36, 101, 132)
-        };
         let theme = crate::ui_kit::theme(dark || fullscreen, crate::Workspace::Reader);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(canvas).inner_margin(if fullscreen {
@@ -171,31 +166,6 @@ impl ImageView {
             .show(ui, |ui| {
                 ui.visuals_mut().override_text_color =
                     Some(if fullscreen { Color32::WHITE } else { ink });
-                let name = Path::new(&self.path)
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("Image");
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("IMAGE").size(11.0).strong().color(
-                        if fullscreen {
-                            Color32::from_rgb(160, 205, 225)
-                        } else {
-                            accent
-                        },
-                    ));
-                    ui.separator();
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(name)
-                                .size(15.0)
-                                .strong()
-                                .color(if fullscreen { Color32::WHITE } else { ink }),
-                        )
-                        .truncate(),
-                    )
-                    .on_hover_text(&self.path);
-                });
-                ui.add_space(9.0);
                 match &self.state {
                     State::Loading(_) => {
                         ui.centered_and_justified(|ui| {
@@ -214,9 +184,18 @@ impl ImageView {
                         );
                     }
                     State::Ready(image) => {
+                        // Leave room for the controls even when the window is narrow
+                        // enough to wrap them onto two or three rows.
+                        let controls_height = if ui.available_width() < 410.0 {
+                            150.0
+                        } else if ui.available_width() < 600.0 {
+                            108.0
+                        } else {
+                            70.0
+                        };
                         let viewport = vec2(
                             ui.available_width(),
-                            (ui.available_height() - 70.0).max(220.0),
+                            (ui.available_height() - controls_height).max(80.0),
                         );
                         let (rect, response) =
                             ui.allocate_exact_size(viewport, Sense::click_and_drag());
@@ -238,9 +217,9 @@ impl ImageView {
                         if response.double_clicked() {
                             toggle_fullscreen = true;
                         }
-                        let size = vec2(image.width as f32, image.height as f32);
-                        let fit =
-                            ((rect.width() - 28.0) / size.x).min((rect.height() - 28.0) / size.y);
+                        let size = vec2(image.width.max(1) as f32, image.height.max(1) as f32);
+                        let fit = ((rect.width() - 28.0).max(1.0) / size.x)
+                            .min((rect.height() - 28.0).max(1.0) / size.y);
                         let (pinch, pointer, scroll) = ui.input(|input| {
                             (
                                 input.zoom_delta(),
@@ -327,14 +306,15 @@ impl ImageView {
                                         self.zoom = (self.zoom / 1.25).max(1.0);
                                     }
                                     ui.label(
-                                        egui::RichText::new(format!("{:.0}%", self.zoom * 100.0))
+                                        egui::RichText::new(format!("{:.2}×", self.zoom))
                                             .monospace()
                                             .color(if fullscreen {
                                                 Color32::from_rgb(190, 194, 199)
                                             } else {
                                                 muted
                                             }),
-                                    );
+                                    )
+                                    .on_hover_text("Zoom relative to Fit to window");
                                     if Button::new("+")
                                         .variant(ButtonVariant::Outline)
                                         .size(ButtonSize::Sm)

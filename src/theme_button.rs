@@ -16,7 +16,10 @@ pub fn icon(
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
     });
     let chrome = crate::ui_kit::chrome(dark);
-    let background = if selected {
+    let enabled = ui.is_enabled();
+    let background = if !enabled {
+        Color32::TRANSPARENT
+    } else if selected {
         chrome
             .surface
             .lerp_to_gamma(accent, if dark { 0.24 } else { 0.12 })
@@ -36,10 +39,20 @@ pub fn icon(
             StrokeKind::Outside,
         );
     }
-    let ink = if selected { accent } else { chrome.ink };
+    let ink = if !enabled {
+        chrome.muted
+    } else if selected {
+        accent
+    } else {
+        chrome.ink
+    };
     pdfcraft_ui_egui::icons::paint(ui, rect, name, 18.0, ink);
     response
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_cursor(if enabled {
+            egui::CursorIcon::PointingHand
+        } else {
+            egui::CursorIcon::Default
+        })
         .on_hover_text(label)
 }
 

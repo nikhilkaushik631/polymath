@@ -417,6 +417,17 @@ impl Polymath {
         let dark = self.dark;
         let chrome = crate::ui_kit::chrome(dark);
         let accent = Workspace::Reader.accent(dark);
+        // Only reveal when selection changes. Repeating scroll_to_me every frame would
+        // prevent someone from scrolling back to an earlier tab in a long strip.
+        let active_id = self.active_reader_tab();
+        let strip_width = ui.available_width().round() as i32;
+        let reveal_active = ui.ctx().data_mut(|data| {
+            let key = egui::Id::new("polymath-reader-last-visible-tab");
+            let current = (active_id, strip_width);
+            let previous = data.get_temp::<(Option<TabId>, i32)>(key);
+            data.insert_temp(key, current);
+            previous != Some(current)
+        });
         let integrated_source = self.source.is_some() && ui.available_width() >= 740.0;
         if let Some(source) = self.source.as_mut() {
             source.toolbar_in_tab = integrated_source;
@@ -553,6 +564,11 @@ impl Polymath {
                                                     rect.bottom() - 1.0,
                                                     Stroke::new(2.0, accent),
                                                 );
+                                                if reveal_active {
+                                                    tab_frame
+                                                        .response
+                                                        .scroll_to_me(Some(Align::Center));
+                                                }
                                             }
                                         }
                                         let response = ui.add(

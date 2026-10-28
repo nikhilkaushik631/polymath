@@ -64,7 +64,12 @@ with (OUT / "app.log").open("w") as log:
         second = OUT / "visual-audit-component.jsx"
         third = OUT / "wiredleap_id_card_vertical (1).svg"
         first.write_text("#!/bin/sh\nprintf 'Polymath'\n", encoding="utf-8")
-        second.write_text("export const Preview = () => <section>Polymath</section>;\n", encoding="utf-8")
+        second.write_text(
+            "export const Preview = () => <section>Polymath</section>;\n"
+            + "\n".join(f"export const row{i} = {i};" for i in range(2, 76))
+            + "\n",
+            encoding="utf-8",
+        )
         third.write_text(
             "\n".join(
                 [
@@ -84,6 +89,10 @@ with (OUT / "app.log").open("w") as log:
         call("app.theme", {"dark": True})
         screenshot("reader-tabs-and-source-dark")
         call("app.theme", {"dark": False})
+        call("app.reader.select", {"path": str(second)})
+        assert call("app.source.goto", {"line": 75})["line"] == 75
+        screenshot("reader-source-last-line")
+        call("app.reader.select", {"path": str(third)})
         call("app.reader.favorite", {"value": True, "path": str(second)})
         for path in (first, second):
             call("app.reader.close", {"path": str(path)})
@@ -92,13 +101,16 @@ with (OUT / "app.log").open("w") as log:
         call("app.theme", {"dark": False})
         call("app.reader.close", {"path": str(third)})
         screenshot("reader-recent-and-favorite")
+        call("app.theme", {"dark": True})
+        screenshot("reader-recent-and-favorite-dark")
+        call("app.theme", {"dark": False})
 
-        video = OUT / "visual-audit-video-long.mp4"
+        video = OUT / "visual-audit-video-16x10.mp4"
         if not video.exists():
             subprocess.run(
                 [
                     "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=24",
+                    "-f", "lavfi", "-i", "testsrc2=size=1280x800:rate=24",
                     "-t", "12", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video),
                 ],
                 check=True,

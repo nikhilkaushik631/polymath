@@ -125,7 +125,9 @@ pub fn show(
                         ui.label(RichText::new("Open a file. Start something new.").size(13.5).color(p.muted));
                     });
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if open_file_action(ui, p).clicked() {
+                        let open = open_file_action(ui, p);
+                        reveal_focus(&open, state.reduce_motion);
+                        if open.clicked() {
                             action = Some(Action::OpenDialog);
                         }
                     });
@@ -303,7 +305,9 @@ fn library_toolbar(ui: &mut egui::Ui, state: &mut HomeState, p: Palette) {
         |ui: &mut egui::Ui, state: &mut HomeState, items: &[(Option<Workspace>, &str)]| {
             ui.spacing_mut().item_spacing.x = 8.0;
             for &(kind, label) in items {
-                if filter_pill(ui, label, state.kind == kind, p).clicked() {
+                let response = filter_pill(ui, label, state.kind == kind, p);
+                reveal_focus(&response, state.reduce_motion);
+                if response.clicked() {
                     state.kind = kind;
                 }
             }
@@ -427,7 +431,7 @@ fn library_sources(
             state.folder = None;
         }
         if recent_response.gained_focus() || recent_response.clicked() {
-            recent_response.scroll_to_me(Some(Align::Min));
+            reveal_source(&recent_response, state.reduce_motion);
         }
         for folder in folders {
             let selected = state.folder.as_ref() == Some(&folder.path);
@@ -436,12 +440,20 @@ fn library_sources(
                 .corner_radius(18)
                 .fill(if selected { p.hover } else { p.surface })
                 .stroke(Stroke::new(1.0, if selected { p.accent } else { p.line }));
-            let response = ui.add(button).on_hover_text(&folder.path);
+            let width = ui.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(name.clone(), home_fonts::medium(11.5), p.ink)
+                    .size()
+                    .x
+            }) + 24.0;
+            let response = ui
+                .add_sized([width.min(240.0), 32.0], button.truncate())
+                .on_hover_text(&folder.path);
             if response.clicked() {
                 state.folder = Some(folder.path.clone());
             }
             if response.gained_focus() || response.clicked() {
-                response.scroll_to_me(Some(Align::Min));
+                reveal_source(&response, state.reduce_motion);
             }
             response.context_menu(|ui| {
                 if ui
@@ -458,14 +470,22 @@ fn library_sources(
             .corner_radius(18)
             .fill(Color32::TRANSPARENT)
             .stroke(Stroke::new(1.0, p.line));
-        if ui
+        let response = ui
             .add(add)
-            .on_hover_text("Choose a folder using the macOS picker")
-            .clicked()
-        {
+            .on_hover_text("Choose a folder using the macOS picker");
+        reveal_focus(&response, state.reduce_motion);
+        if response.clicked() {
             *action = Some(Action::ChooseFolder);
         }
     });
+}
+
+fn reveal_source(response: &egui::Response, reduce_motion: bool) {
+    if reduce_motion {
+        response.scroll_to_me_animation(Some(Align::Min), egui::style::ScrollAnimation::none());
+    } else {
+        response.scroll_to_me(Some(Align::Min));
+    }
 }
 
 pub fn filtered<'a>(paths: &'a [String], state: &HomeState) -> Vec<&'a String> {

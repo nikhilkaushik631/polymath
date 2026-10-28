@@ -60,6 +60,7 @@ Full engine/control references remain in the sibling projects:
 | `app.reader.tabs` | `{}` | List Reader tabs with stable IDs, paths, active and dirty state |
 | `app.reader.select` | `{id?: string, path?: string}` | Activate an existing Reader tab |
 | `app.reader.close` | `{id?: string, path?: string}` | Close one Reader tab, defaulting to the active tab; unsaved PDFs ask before closing |
+| `app.source.goto` | `{line: 75}` | Jump to a one-based line in the active read-only source preview |
 | `app.media.inspect` | `{}` | Inspect the active audio/video file, codec, duration, playback state and folder queue summary |
 | `app.media.queue` | `{offset?: number, limit?: number}` | List up to 100 local queue entries per call, including real music tags when present |
 | `app.media.play` / `app.media.pause` | `{}` | Start or pause local playback in Reader |

@@ -42,7 +42,8 @@ impl Polymath {
             return;
         }
         let mut open = self.voice.panel_open;
-        let muted = Color32::from_gray(if self.dark { 172 } else { 105 });
+        let chrome = crate::ui_kit::chrome(self.dark);
+        let muted = chrome.muted;
         let selected_fill = if self.dark {
             Color32::from_rgb(37, 62, 75)
         } else {
@@ -61,14 +62,42 @@ impl Polymath {
             .default_size(vec2(700.0, 520.0))
             .min_width(650.0)
             .max_width(760.0)
+            .max_height((ctx.content_rect().height() - 64.0).max(260.0))
+            .frame(
+                egui::Frame::window(&ctx.style_of(if self.dark {
+                    egui::Theme::Dark
+                } else {
+                    egui::Theme::Light
+                }))
+                .fill(chrome.canvas)
+                .stroke(egui::Stroke::new(1.0, chrome.line)),
+            )
             .show(ctx, |ui| {
-                ui.visuals_mut().override_text_color =
-                    Some(Color32::from_gray(if self.dark { 235 } else { 28 }));
+                // Editors install their own fonts and control styles. Settings
+                // keeps shared typography without replacing the editor fonts.
+                for font in ui.style_mut().text_styles.values_mut() {
+                    font.family = egui::FontFamily::Proportional;
+                }
+                for (style, size) in [
+                    (egui::TextStyle::Body, 13.0),
+                    (egui::TextStyle::Button, 13.0),
+                    (egui::TextStyle::Small, 11.0),
+                ] {
+                    ui.style_mut()
+                        .text_styles
+                        .insert(style, egui::FontId::proportional(size));
+                }
+                ui.visuals_mut().override_text_color = Some(chrome.ink);
+                ui.visuals_mut().weak_text_color = Some(chrome.muted);
+                ui.visuals_mut().selection.bg_fill = selected_fill;
+                ui.visuals_mut().selection.stroke = egui::Stroke::new(1.0, selected_ink);
                 ui.style_mut().spacing.button_padding = vec2(12.0, 8.0);
+                ui.style_mut().spacing.item_spacing = vec2(8.0, 8.0);
+                let body_height = ui.available_height().clamp(240.0, 430.0);
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.set_width(158.0);
-                        ui.set_min_height(430.0);
+                        ui.set_min_height(body_height);
                         ui.add_space(8.0);
                         ui.label(RichText::new("Preferences").size(11.5).color(muted));
                         ui.add_space(12.0);
@@ -114,7 +143,8 @@ impl Polymath {
                         // from growing this dialog to the whole desktop width.
                         ui.set_width(470.0);
                         ui.set_max_width(470.0);
-                        ui.set_min_height(430.0);
+                        ui.set_min_height(body_height);
+                        let content_top = ui.cursor().top();
                         if !self.voice.notice.is_empty() && self.settings_page != Page::Voice {
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new(&self.voice.notice).size(11.0).color(muted));
@@ -124,11 +154,17 @@ impl Polymath {
                             });
                             ui.separator();
                         }
-                        egui::ScrollArea::vertical().show(ui, |ui| match self.settings_page {
-                            Page::Appearance => self.appearance_settings(ui, ctx, muted),
-                            Page::Voice => self.voice_settings(ui, muted),
-                            Page::Files => self.file_settings(ui, frame, ctx, muted),
-                        });
+                        egui::ScrollArea::vertical()
+                            .id_salt(("settings-content", self.settings_page.label()))
+                            .max_height(
+                                (body_height - (ui.cursor().top() - content_top)).max(100.0),
+                            )
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| match self.settings_page {
+                                Page::Appearance => self.appearance_settings(ui, ctx, muted),
+                                Page::Voice => self.voice_settings(ui, muted),
+                                Page::Files => self.file_settings(ui, frame, ctx, muted),
+                            });
                     });
                 });
             });
@@ -204,7 +240,7 @@ impl Polymath {
                 );
             });
             ui.label(
-                RichText::new("Turns off Home card transitions.")
+                RichText::new("Turns off card transitions and animated focus scrolling.")
                     .size(12.0)
                     .color(muted),
             );
@@ -279,7 +315,10 @@ impl Polymath {
         settings_card(ui, self.dark, |ui| {
             ui.label(RichText::new("PDF read aloud").size(15.0).strong());
             let active_pdf = (self.active == Workspace::Tools
-                || (self.active == Workspace::Reader && self.source.is_none()))
+                || (self.active == Workspace::Reader
+                    && self.source.is_none()
+                    && self.media.is_none()
+                    && self.image_preview.is_none()))
                 && self.reader.active_ids().is_some();
             let page = self
                 .reader
@@ -403,20 +442,44 @@ impl Polymath {
             } else {
                 let mut removed = None;
                 for path in &self.folders {
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            let name = std::path::Path::new(path)
-                                .file_name()
-                                .and_then(|name| name.to_str())
-                                .unwrap_or(path);
-                            ui.label(RichText::new(name).size(12.5).strong());
-                            ui.label(RichText::new(path).size(10.5).color(muted));
-                        });
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui.small_button("Remove").clicked() {
-                                removed = Some(path.clone());
-                            }
-                        });
+                    ui.push_id(path, |ui| {
+                        ui.horizontal(|ui| {
+                            let label_width = (ui.available_width() - 82.0).max(100.0);
+                            ui.allocate_ui_with_layout(
+                                vec2(label_width, 40.0),
+                                Layout::top_down(Align::LEFT),
+                                |ui| {
+                                    ui.set_width(label_width);
+                                    let name = std::path::Path::new(path)
+                                        .file_name()
+                                        .and_then(|name| name.to_str())
+                                        .unwrap_or(path);
+                                    ui.add(
+                                        egui::Label::new(RichText::new(name).size(12.5).strong())
+                                            .truncate(),
+                                    )
+                                    .on_hover_text(path);
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(path).size(11.0).color(muted),
+                                        )
+                                        .truncate(),
+                                    )
+                                    .on_hover_text(path);
+                                },
+                            );
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                if ui
+                                    .small_button("Remove")
+                                    .on_hover_text(format!(
+                                        "Stop listing {path}. Its files are kept."
+                                    ))
+                                    .clicked()
+                                {
+                                    removed = Some(path.clone());
+                                }
+                            });
+                        })
                     });
                     if path != self.folders.last().unwrap_or(path) {
                         ui.separator();
@@ -433,7 +496,7 @@ impl Polymath {
             ui.label(RichText::new("Local file handling").size(15.0).strong());
             ui.label(
                 RichText::new(
-                    "Markdown and text open in Reader · Edit opens Writer · CSV opens in Sheets",
+                    "Files open in Reader first. Use Edit to open the original in its editor.",
                 )
                 .size(12.0),
             );
@@ -457,15 +520,14 @@ fn heading(ui: &mut egui::Ui, title: &str, subtitle: &str, muted: Color32) {
 
 fn settings_card(ui: &mut egui::Ui, dark: bool, body: impl FnOnce(&mut egui::Ui)) {
     let width = ui.available_width();
-    let fill = Color32::from_gray(if dark { 35 } else { 252 });
-    let border = Color32::from_gray(if dark { 62 } else { 218 });
+    let chrome = crate::ui_kit::chrome(dark);
     egui::Frame::new()
-        .fill(fill)
-        .stroke(egui::Stroke::new(1.0, border))
+        .fill(chrome.surface)
+        .stroke(egui::Stroke::new(1.0, chrome.line))
         .corner_radius(14)
         .inner_margin(16)
         .show(ui, |ui| {
-            ui.set_width((width - 32.0).max(100.0));
+            ui.set_width((width - 34.0).max(100.0));
             body(ui);
         });
 }
