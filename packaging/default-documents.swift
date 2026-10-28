@@ -104,17 +104,62 @@ if setting {
         exit(1)
     }
 }
-for (_, type) in registeredTypes {
-    if let application {
-        // The older Launch Services setter reports success on macOS 26 while
-        // leaving explicit Music/VLC/VS Code associations untouched. Use the
-        // public NSWorkspace setter, then verify with --check in a fresh process.
-        NSWorkspace.shared.setDefaultApplication(at: application, toOpen: type)
-    }
-}
 if setting {
-    print("Requested defaults for \(registeredTypes.count) document extensions. Run --check in a new process to verify Finder's resolved handlers.")
-    exit(failed ? 1 : 0)
+    guard let application else { exit(2) }
+    // This API is asynchronous. Keep the process alive for its completions;
+    // otherwise the last few associations can retain their previous handler.
+    let needed = registeredTypes.filter { _, type in
+        NSWorkspace.shared.urlForApplication(toOpen: type)?.standardizedFileURL != application.standardizedFileURL
+    }
+    if needed.isEmpty {
+        print("All \(registeredTypes.count) document extensions already resolve to Polymath.")
+        exit(failed ? 1 : 0)
+    }
+    // Launch Services may request consent. NSApplication's event loop is needed
+    // for both the consent sheet and the completion callbacks.
+    let host = NSApplication.shared
+    host.setActivationPolicy(.regular)
+    host.finishLaunching()
+    host.activate(ignoringOtherApps: true)
+    let lock = NSLock()
+    var errors: [String] = []
+    var remaining = needed.count
+    var finished = false
+    func finish(_ timedOut: Bool) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let reported = errors
+        lock.unlock()
+        if timedOut {
+            fputs("Timed out waiting for macOS to apply file defaults.\n", stderr)
+        }
+        for error in reported {
+            fputs("\(error)\n", stderr)
+        }
+        print("Requested defaults for \(needed.count) document extensions. Run --check in a new process to verify Finder's resolved handlers.")
+        exit(failed || timedOut || !reported.isEmpty ? 1 : 0)
+    }
+    for (ext, type) in needed {
+        NSWorkspace.shared.setDefaultApplication(at: application, toOpen: type) { error in
+            lock.lock()
+            if let error {
+                errors.append(".\(ext): \(error)")
+            }
+            remaining -= 1
+            let done = remaining == 0
+            lock.unlock()
+            if done {
+                DispatchQueue.main.async { finish(false) }
+            }
+        }
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 45) { finish(true) }
+    host.run()
+    exit(1)
 }
 for (ext, type) in registeredTypes {
     let current = NSWorkspace.shared.urlForApplication(toOpen: type)

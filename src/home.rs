@@ -230,6 +230,7 @@ impl Polymath {
                             } else if self.source.is_none()
                                 && self.media.is_none()
                                 && self.image_preview.is_none()
+                                && self.archive_preview.is_none()
                                 && self.active_office_preview_path().is_none()
                                 && self.reader.first_dirty().is_some()
                                 && ui.button("Save PDF").clicked()
@@ -292,6 +293,10 @@ impl Polymath {
             }
             Some(home_view::Action::OpenDialog) => {
                 self.pick(false, frame, &ctx);
+                Ok(())
+            }
+            Some(home_view::Action::OpenArchiveDialog) => {
+                self.pick_filtered(false, frame, &ctx, crate::archive_view::EXTENSIONS);
                 Ok(())
             }
             Some(home_view::Action::ChooseFolder) => {

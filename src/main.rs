@@ -8,6 +8,7 @@
     clippy::todo,
     clippy::unreachable
 )]
+mod archive_view;
 mod audio;
 mod automation;
 mod control;
@@ -55,6 +56,7 @@ struct Polymath {
     source: Option<source_view::SourceFile>,
     media: Option<media_view::MediaView>,
     image_preview: Option<image_view::ImageView>,
+    archive_preview: Option<archive_view::ArchiveView>,
     active_preview_id: Option<u64>,
     inactive_reader_previews: Vec<reader_tabs::PreviewSlot>,
     reader_tab_order: Vec<reader_tabs::TabId>,
@@ -160,6 +162,7 @@ impl Polymath {
             source: None,
             media: None,
             image_preview: None,
+            archive_preview: None,
             active_preview_id: None,
             inactive_reader_previews: Vec::new(),
             reader_tab_order: Vec::new(),
@@ -322,7 +325,11 @@ impl Polymath {
                 self.reader.host_tools_workspace = false;
                 self.reader.mode = pdfcraft_ui_egui::Mode::Read;
                 self.reader.default_mode = pdfcraft_ui_egui::Mode::Read;
-                if self.source.is_some() || self.media.is_some() || self.image_preview.is_some() {
+                if self.source.is_some()
+                    || self.media.is_some()
+                    || self.image_preview.is_some()
+                    || self.archive_preview.is_some()
+                {
                     home_fonts::install(ctx);
                     self.home_theme(ctx);
                 } else {
@@ -377,7 +384,8 @@ impl Polymath {
             Workspace::Reader
                 if self.source.is_some()
                     || self.media.is_some()
-                    || self.image_preview.is_some() =>
+                    || self.image_preview.is_some()
+                    || self.archive_preview.is_some() =>
             {
                 self.home_theme(ctx)
             }
@@ -450,6 +458,9 @@ impl Polymath {
         self.open(path, ctx).map(|_| ())
     }
     fn open_for_edit(&mut self, path: &str, ctx: &egui::Context) -> Result<Value, String> {
+        if archive_view::is_archive(Path::new(path)) {
+            return self.open_in_reader(path, ctx);
+        }
         if workspace::is_video_path(Path::new(path)) {
             self.video_editor.add_clip_path(path.into(), ctx)?;
             self.activate(Workspace::Video, ctx);
@@ -467,6 +478,9 @@ impl Polymath {
         edit: bool,
     ) -> Result<Value, String> {
         let p = Path::new(path);
+        if archive_view::is_archive(p) {
+            return self.open_in_reader(path, ctx);
+        }
         if !p.is_file() {
             self.recent.retain(|item| item != path);
             return Err(format!("File not found: {path}"));
@@ -558,6 +572,14 @@ impl Polymath {
             return Err(format!("File not found: {path}"));
         }
         if self.select_reader_path(path, ctx) {
+            self.recent.retain(|item| item != path);
+            self.recent.insert(0, path.to_owned());
+            self.recent.truncate(16);
+            return Ok(json!({"workspace":"reader","requested":path,"readOnly":true}));
+        }
+        if archive_view::is_archive(file) {
+            let preview = archive_view::ArchiveView::open(file, ctx)?;
+            self.open_reader_preview(reader_tabs::Preview::Archive(preview), ctx);
             self.recent.retain(|item| item != path);
             self.recent.insert(0, path.to_owned());
             self.recent.truncate(16);
@@ -690,6 +712,9 @@ impl Polymath {
             })
     }
     fn current_reader_path(&self) -> Option<String> {
+        if let Some(archive) = &self.archive_preview {
+            return Some(archive.path.clone());
+        }
         if let Some(image) = &self.image_preview {
             return Some(image.path.clone());
         }
@@ -706,7 +731,11 @@ impl Polymath {
             .or_else(|| self.reader.session.get(id).and_then(|doc| doc.path.clone()))
     }
     fn active_office_preview_path(&self) -> Option<&str> {
-        if self.source.is_some() || self.media.is_some() || self.image_preview.is_some() {
+        if self.source.is_some()
+            || self.media.is_some()
+            || self.image_preview.is_some()
+            || self.archive_preview.is_some()
+        {
             return None;
         }
         let (_, id) = self.reader.active_ids()?;
@@ -784,7 +813,7 @@ impl Polymath {
         }
     }
     fn summary(&self) -> Value {
-        json!({"application":"Polymath","workspace":self.active,"dark":self.dark,"dirtyWorkspaces":self.dirty_workspaces(),"quitConfirmation":self.quit_requested,"localFolders":self.folders,"recent":self.recent,"readerTabs":self.reader_tabs_json(),"source":self.source.as_ref().map(|file| json!({"path":file.path,"language":file.language,"lines":file.line_count()})),"imagePreview":self.image_preview.as_ref().map(|image| image.inspect()),"media":self.media.as_ref().map(|media| media.inspect()),"videoEditor":self.video_editor.inspect(),"editors":{"reader":self.reader.session.docs().len(),"writer":1,"sheets":self.sheets.session.documents().len(),"slides":self.slides.session.documents().len(),"images":self.images.session.catalog.len(),"video":self.video_editor.inspect()["clipCount"]},"imagesError":self.images_error})
+        json!({"application":"Polymath","workspace":self.active,"dark":self.dark,"dirtyWorkspaces":self.dirty_workspaces(),"quitConfirmation":self.quit_requested,"localFolders":self.folders,"recent":self.recent,"readerTabs":self.reader_tabs_json(),"source":self.source.as_ref().map(|file| json!({"path":file.path,"language":file.language,"lines":file.line_count()})),"imagePreview":self.image_preview.as_ref().map(|image| image.inspect()),"archivePreview":self.archive_preview.as_ref().map(|archive| archive.inspect()),"media":self.media.as_ref().map(|media| media.inspect()),"videoEditor":self.video_editor.inspect(),"editors":{"reader":self.reader.session.docs().len(),"writer":1,"sheets":self.sheets.session.documents().len(),"slides":self.slides.session.documents().len(),"images":self.images.session.catalog.len(),"video":self.video_editor.inspect()["clipCount"]},"imagesError":self.images_error})
     }
 }
 impl eframe::App for Polymath {
@@ -891,7 +920,8 @@ impl eframe::App for Polymath {
             Workspace::Reader
                 if self.source.is_none()
                     && self.media.is_none()
-                    && self.image_preview.is_none() =>
+                    && self.image_preview.is_none()
+                    && self.archive_preview.is_none() =>
             {
                 self.reader.raw_input_hook(ctx, raw)
             }
@@ -935,7 +965,8 @@ impl eframe::App for Polymath {
             Workspace::Reader
                 if self.source.is_none()
                     && self.media.is_none()
-                    && self.image_preview.is_none() =>
+                    && self.image_preview.is_none()
+                    && self.archive_preview.is_none() =>
             {
                 self.reader.logic(ctx, frame)
             }
@@ -1001,7 +1032,8 @@ impl eframe::App for Polymath {
             Workspace::Reader
                 if self.source.is_none()
                     && self.media.is_none()
-                    && self.image_preview.is_none() =>
+                    && self.image_preview.is_none()
+                    && self.archive_preview.is_none() =>
             {
                 Some(self.reader.theme == pdfcraft_ui_egui::theme::ThemeKind::Dark)
             }
@@ -1051,6 +1083,7 @@ impl eframe::App for Polymath {
                 && self.source.is_none()
                 && self.media.is_none()
                 && self.image_preview.is_none()
+                && self.archive_preview.is_none()
                 || self.media.as_ref().is_some_and(|media| media.fullscreen)
                 || self
                     .image_preview
@@ -1079,6 +1112,11 @@ impl eframe::App for Polymath {
             Workspace::Reader if self.image_preview.is_some() => {
                 if let Some(image) = &mut self.image_preview {
                     image.show(ui, self.dark);
+                }
+            }
+            Workspace::Reader if self.archive_preview.is_some() => {
+                if let Some(archive) = &mut self.archive_preview {
+                    archive.show(ui, frame, self.dark);
                 }
             }
             Workspace::Reader if self.reader.active.is_none() => self.reader_landing(ui, frame),

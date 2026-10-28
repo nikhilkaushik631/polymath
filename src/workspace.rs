@@ -70,6 +70,7 @@ impl Workspace {
             .to_ascii_lowercase();
         match ext.as_str() {
             "pdf" => Ok(Self::Reader),
+            "zip" | "rar" | "7z" => Ok(Self::Reader),
             _ if MEDIA_EXTENSIONS.contains(&ext.as_str()) => Ok(Self::Reader),
             "docx" | "docm" | "dotx" | "dotm" | "doc" | "dot" | "odt" | "rtf" | "txt" | "md" => {
                 Ok(Self::Writer)
@@ -112,6 +113,9 @@ pub fn is_video_path(path: &Path) -> bool {
 }
 pub const EXTENSIONS: &[&str] = &[
     "pdf",
+    "zip",
+    "rar",
+    "7z",
     "docx",
     "docm",
     "dotx",

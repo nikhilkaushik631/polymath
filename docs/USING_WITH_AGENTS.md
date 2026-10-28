@@ -20,7 +20,7 @@ A control file must not already exist. `POLYMATH_NO_PREFS=1` disables preference
 ## Authoring workflow
 
 1. `polymath_inspect` shows the current workspace and every dirty workspace. Preserve unrelated work.
-2. `polymath_open {path}` opens a read-only Reader tab for every supported file type. `edit:true` deliberately opens the appropriate Writer, Sheets, Slides, Images, or Video editor. CSV and TSV appear as tables in Reader; office formats appear as in-memory PDF previews. Audio and video play locally in Reader. `polymath_switch {workspace:"images"}` activates the editor. Workspaces are `reader`, `tools` (PDF Tools), `writer`, `sheets`, `slides`, `images`, `video`, `home`.
+2. `polymath_open {path}` opens a read-only Reader tab for every supported file type. `edit:true` deliberately opens the appropriate Writer, Sheets, Slides, Images, or Video editor. CSV and TSV appear as tables in Reader; office formats appear as in-memory PDF previews. ZIP, RAR and 7z archives open in Reader for browsing and explicit extraction. Audio and video play locally in Reader. `polymath_switch {workspace:"images"}` activates the editor. Workspaces are `reader`, `tools` (PDF Tools), `writer`, `sheets`, `slides`, `images`, `video`, `home`.
 3. `polymath_commands {workspace}` returns the real command catalog and parameter descriptions. Inspect this before guessing command names or arguments.
 4. `polymath_execute {workspace,command,params}` runs a command in that editor. `polymath_document {workspace}` inspects the result.
 5. Save to a user-requested path. Reopen or inspect the saved file and render/check it. `polymath_screenshot {path}` captures the whole Polymath window; use a synthetic document for published evidence.
@@ -46,7 +46,7 @@ Full engine/control references remain in the sibling projects:
 | `app.inspect` | `{}` | Current workspace, theme, dirty workspaces and open counts |
 | `app.workspace` | `{workspace}` | Preserve sessions and change visible editor |
 | `app.open` | `{path, edit?: bool}` | Open a local file in a Reader tab; `edit:true` enters the appropriate editor |
-| `app.preview` | `{path}` | View a local PDF, office, image, media, source or text file read-only in Reader; office conversion stays in memory |
+| `app.preview` | `{path}` | View a local PDF, office, image, media, archive, source or text file read-only in Reader; office conversion stays in memory |
 | `app.video.inspect` | `{}` | Inspect the Video editor timeline, audio choice and export state |
 | `app.video.add` | `{path}` | Add a local video clip to the editor timeline and enter Video |
 | `app.video.trim` | `{index:0,start:0.5,end:8.0}` | Set source-relative in/out seconds for a loaded clip |

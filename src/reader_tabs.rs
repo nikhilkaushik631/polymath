@@ -1,7 +1,7 @@
 //! One visible tab strip for every file opened in Reader. PDF documents retain the Reader
 //! engine's save and recovery path; read-only previews keep their live viewer state in memory.
 
-use crate::{Polymath, Workspace, home_fonts, image_view, media_view, source_view};
+use crate::{Polymath, Workspace, archive_view, home_fonts, image_view, media_view, source_view};
 use egui::{Align, Color32, Layout, RichText, Stroke, TextWrapMode, vec2};
 use pdfcraft_engine::DocId;
 use serde_json::{Value, json};
@@ -36,6 +36,7 @@ pub(crate) enum Preview {
     Source(source_view::SourceFile),
     Media(media_view::MediaView),
     Image(image_view::ImageView),
+    Archive(archive_view::ArchiveView),
 }
 
 impl Preview {
@@ -44,6 +45,7 @@ impl Preview {
             Self::Source(file) => &file.path,
             Self::Media(file) => &file.path,
             Self::Image(file) => &file.path,
+            Self::Archive(file) => &file.path,
         }
     }
 
@@ -52,6 +54,7 @@ impl Preview {
             Self::Source(_) => "Source",
             Self::Media(_) => "Media",
             Self::Image(_) => "Image",
+            Self::Archive(_) => "Archive",
         }
     }
 }
@@ -121,6 +124,7 @@ impl Polymath {
             .map(|file| file.path.as_str())
             .or_else(|| self.media.as_ref().map(|file| file.path.as_str()))
             .or_else(|| self.image_preview.as_ref().map(|file| file.path.as_str()))
+            .or_else(|| self.archive_preview.as_ref().map(|file| file.path.as_str()))
     }
 
     pub(crate) fn active_reader_tab(&self) -> Option<TabId> {
@@ -145,6 +149,8 @@ impl Polymath {
                 file.set_fullscreen(ctx, false);
             }
             Preview::Image(file)
+        } else if let Some(file) = self.archive_preview.take() {
+            Preview::Archive(file)
         } else {
             return None;
         };
@@ -163,6 +169,7 @@ impl Polymath {
             Preview::Source(file) => self.source = Some(file),
             Preview::Media(file) => self.media = Some(file),
             Preview::Image(file) => self.image_preview = Some(file),
+            Preview::Archive(file) => self.archive_preview = Some(file),
         }
         if self.active == Workspace::Reader {
             home_fonts::install(ctx);
@@ -312,6 +319,8 @@ impl Polymath {
                             (file.path.as_str(), "Media")
                         } else if let Some(file) = &self.image_preview {
                             (file.path.as_str(), "Image")
+                        } else if let Some(file) = &self.archive_preview {
+                            (file.path.as_str(), "Archive")
                         } else {
                             return None;
                         }
@@ -482,21 +491,24 @@ impl Polymath {
                                                     ui.horizontal_centered(|ui| {
                                                         ui.spacing_mut().item_spacing.x = 2.0;
                                                         let title = compact_tab_title(&tab.title);
-                                                        let icon = match tab.kind {
+                                                        let icon_name = match tab.kind {
                                                             "Source" => "file-code",
                                                             "Image" => "image",
                                                             "Media" => "film",
                                                             _ => "file-text",
                                                         };
-                                                        ui.add(pdfcraft_ui_egui::icons::image(
-                                                            icon,
-                                                            14.0,
-                                                            if tab.active {
-                                                                accent
-                                                            } else {
-                                                                chrome.muted
-                                                            },
-                                                        ));
+                                                        let tint = if tab.active {
+                                                            accent
+                                                        } else {
+                                                            chrome.muted
+                                                        };
+                                                        ui.add(if tab.kind == "Archive" {
+                                                            archive_view::icon(14.0, tint)
+                                                        } else {
+                                                            pdfcraft_ui_egui::icons::image(
+                                                                icon_name, 14.0, tint,
+                                                            )
+                                                        });
                                                         if ui
                                                             .add(
                                                                 egui::Button::new(

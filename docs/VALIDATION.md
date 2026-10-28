@@ -1,4 +1,16 @@
-# Local validation — Polymath 0.4.19, 2026-10-28
+# Local validation — Polymath 0.4.20, 2026-10-29
+
+ZIP, RAR and 7z files now open as independently closable Reader tabs. The archive view lists and filters contents, extracts all or selected regular files and folders to a new destination folder, reports progress, and supports cancellation. It skips links, traversal paths, wildcard names and duplicate output paths. A Home Archives card opens the archive picker. Extraction uses the macOS system libarchive tool on demand; it does not modify the source archive.
+
+All 38 Rust tests passed, including the focused archive path and nested ZIP extraction tests. The signed bundle passed `tests/archive_native.py` for opening, listing and closing a ZIP Reader tab, plus `tests/native_smoke.py` for file routing, office previews, editor switching, save/reopen and the unsaved-change guard. Native ZIP, RAR and 7z samples were listed in Reader; a RAR capture was inspected in light mode and showed the unsupported symbolic link disabled. The locked optimized build, Rust formatting, Python syntax, whitespace checks, strict bundle signature verification and DMG verification passed.
+
+The 0.4.19 app and installer were archived under `../installers/previous-versions/`. `/Applications/Polymath.app` and `../installers/Polymath.dmg` match the tested signed bundle and verified DMG. A fresh Launch Services check confirms all 122 configured file extensions, including `.zip`, `.rar` and `.7z`, resolve to the installed app; HTTP and HTTPS still use the browser. The default-handler utility now keeps a macOS application event loop active while waiting for the asynchronous association changes and any system consent.
+
+Installed and signed-bundle executable SHA-256: `8dc53d87f453c6e1cfb8ec3a95bb196bbff35a1b40c2d632caa08b9d07ce0d5b`
+
+DMG SHA-256: `ded075b092d718d83961da039a1b1f36175adfa17794134bb358519f82b6fed4`
+
+## Previous Polymath 0.4.19 validation — 2026-10-28
 
 Voice settings now puts the global dictation shortcut, live permission state, and recovery action in the first panel. A blocked Input Monitoring or Accessibility state offers a direct System Settings button and **Check access**, which restarts the companion. The in-app microphone and PDF narration settings are grouped below. Settings navigation uses simpler, consistent selection styling, and the dialog shows more content before scrolling.
 

@@ -8,6 +8,7 @@ For UI implementation and compatible egui libraries, see [Native UI stack](UI_ST
 | --- | --- | --- |
 | Home and Settings | [Home and Settings](HOME_AND_SETTINGS.md) | Library, chosen folders, theme, local access |
 | Reader | [Reader](READER.md) | PDF, office, Markdown, text and code previews; edit handoff |
+| Archives | [Archives](ARCHIVES.md) | Browse and extract ZIP, RAR and 7z files |
 | PDF Tools | [PDF Tools](PDF_TOOLS.md) | Local PDF operations and current capability gaps |
 | OCR | [Local OCR](OCR.md) | On-demand English OCR and model choices for this Mac |
 | Writer | [Writer](WRITER.md) | DOCX, Markdown and plain text editing and Save As |

@@ -29,6 +29,7 @@ pub struct Folder {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
     OpenDialog,
+    OpenArchiveDialog,
     Enter(Workspace),
     ChooseFolder,
     RemoveFolder(String),
@@ -661,7 +662,68 @@ fn launchpad(ui: &mut egui::Ui, p: Palette, reduce_motion: bool, action: &mut Op
         });
         ui.add_space(5.0);
     }
+    archive_launch_card(ui, p, reduce_motion, width, action);
     ui.spacing_mut().item_spacing.x = 8.0;
+}
+
+fn archive_launch_card(
+    ui: &mut egui::Ui,
+    p: Palette,
+    reduce_motion: bool,
+    width: f32,
+    action: &mut Option<Action>,
+) {
+    let (rect, response) = ui.allocate_exact_size(vec2(width, 95.0), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "Open Archives")
+    });
+    reveal_focus(&response, reduce_motion);
+    let hover = card_hover(ui, &response, reduce_motion);
+    let tone = if p.dark {
+        Color32::from_rgb(223, 188, 132)
+    } else {
+        Color32::from_rgb(127, 88, 43)
+    };
+    let base = if p.dark {
+        Color32::from_rgb(47, 39, 32)
+    } else {
+        Color32::from_rgb(247, 239, 225)
+    };
+    ui.painter()
+        .rect_filled(rect, 12, base.lerp_to_gamma(p.hover, hover * 0.15));
+    ui.painter()
+        .rect_stroke(rect, 12, Stroke::new(1.0, p.line), StrokeKind::Inside);
+    card_focus(ui, &response, p);
+    crate::archive_view::icon(23.0, tone).paint_at(
+        ui,
+        Rect::from_min_size(rect.left_top() + vec2(20.0, 18.0), vec2(23.0, 23.0)),
+    );
+    ui.painter().text(
+        rect.left_top() + vec2(56.0, 18.0),
+        Align2::LEFT_TOP,
+        "Archives",
+        home_fonts::heading(19.0),
+        p.ink,
+    );
+    ui.painter().text(
+        rect.left_top() + vec2(56.0, 48.0),
+        Align2::LEFT_TOP,
+        "Browse and extract ZIP, RAR and 7z",
+        FontId::proportional(12.0),
+        p.muted,
+    );
+    if width >= 560.0 {
+        ui.painter().text(
+            rect.right_center() - vec2(100.0, 0.0),
+            Align2::LEFT_CENTER,
+            "Open archive  →",
+            home_fonts::medium(11.5),
+            tone,
+        );
+    }
+    if response.clicked() {
+        *action = Some(Action::OpenArchiveDialog);
+    }
 }
 
 fn workspace_feature(

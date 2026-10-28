@@ -10,4 +10,6 @@ Images open read-only with Fit, zoom and pan; **Edit in Images** in the top bar 
 
 Audio and video files open in Reader's embedded local player with Play, Pause and seek controls. See [Media](MEDIA.md) for supported formats and current limits.
 
+ZIP, RAR and 7z archives open in Reader tabs with a searchable file list. Use **Extract all** or select items and choose **Extract selected**; Polymath creates a new output folder. See [Archives](ARCHIVES.md) for the supported entries and safety rules.
+
 PDF editing, conversion, signing and the full command catalog live in the separate [PDF Tools](PDF_TOOLS.md) workspace. PDF narration lives under **Settings → Voice**; see [Voice](VOICE.md). For coding agents, `app.preview {path}` is always read-only; `app.open {path,edit:true}` opens Markdown or plain text in Writer. See [the agent guide](USING_WITH_AGENTS.md).
