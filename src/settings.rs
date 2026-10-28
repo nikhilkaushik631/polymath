@@ -259,7 +259,7 @@ impl Polymath {
             ui.label(RichText::new("Dictation").size(15.0).strong());
             ui.label(
                 RichText::new(
-                    "Select a field, press the toolbar microphone, speak, then press it again.",
+                    "In Writer, Sheets, Slides or PDF Tools, select a text field, press the toolbar microphone, speak, then press it again.",
                 )
                 .size(12.0)
                 .color(muted),
@@ -316,7 +316,7 @@ impl Polymath {
             ui.label(RichText::new("Dictate anywhere").size(15.0).strong());
             ui.add_space(5.0);
             ui.label(
-                RichText::new("Hold right ⌘ + right ⌥ while a text field is selected in any app. Release either key to transcribe and insert.")
+                RichText::new("Hold ⌘ + ⌥ (either side) in any app's text field, then speak. Release either key to transcribe and insert.")
                     .size(12.0)
                     .color(muted),
             );

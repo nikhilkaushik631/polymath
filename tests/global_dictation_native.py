@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix="polymath-global-dictation-", dir=ROOT /
             assert state(False) == {
                 "enabled": False,
                 "status": "Off",
-                "shortcut": "right Command + right Option",
+                "shortcut": "Command + Option (either side)",
             }
             print("PASS: global shortcut starts, reports permission state, and stops")
         finally:

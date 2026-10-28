@@ -150,38 +150,47 @@ impl Polymath {
                         {
                             self.voice.panel_open = !self.voice.panel_open;
                         }
-                        let mic_label = if self.voice.recording() {
-                            "Stop dictation and insert"
-                        } else if self.voice.transcribing() {
-                            "Transcribing locally…"
-                        } else {
-                            "Dictate into the selected text field"
-                        };
-                        let mic = ui
-                            .add_enabled_ui(!self.voice.transcribing(), |ui| {
-                                crate::theme_button::icon(
-                                    ui,
-                                    "mic",
-                                    mic_label,
-                                    self.dark,
-                                    self.voice.recording(),
-                                    self.active.accent(self.dark),
-                                )
-                            })
-                            .inner;
-                        if mic.clicked() {
-                            let result = if self.voice.recording() {
-                                self.voice.stop_dictation()
+                        if matches!(
+                            self.active,
+                            Workspace::Tools
+                                | Workspace::Writer
+                                | Workspace::Sheets
+                                | Workspace::Slides
+                        ) || self.voice.recording()
+                        {
+                            let mic_label = if self.voice.recording() {
+                                "Stop dictation and insert"
+                            } else if self.voice.transcribing() {
+                                "Transcribing locally…"
                             } else {
-                                self.voice
-                                    .start_dictation(self.active, focused_before_toolbar)
+                                "Dictate into the selected text field"
                             };
-                            if let Err(error) = result {
-                                self.voice.notice = error;
-                                self.voice.panel_open = true;
-                                self.settings_page = crate::settings::Page::Voice;
+                            let mic = ui
+                                .add_enabled_ui(!self.voice.transcribing(), |ui| {
+                                    crate::theme_button::icon(
+                                        ui,
+                                        "mic",
+                                        mic_label,
+                                        self.dark,
+                                        self.voice.recording(),
+                                        self.active.accent(self.dark),
+                                    )
+                                })
+                                .inner;
+                            if mic.clicked() {
+                                let result = if self.voice.recording() {
+                                    self.voice.stop_dictation()
+                                } else {
+                                    self.voice
+                                        .start_dictation(self.active, focused_before_toolbar)
+                                };
+                                if let Err(error) = result {
+                                    self.voice.notice = error;
+                                    self.voice.panel_open = true;
+                                    self.settings_page = crate::settings::Page::Voice;
+                                }
+                                ctx.request_repaint();
                             }
-                            ctx.request_repaint();
                         }
                         if self.active == Workspace::Reader {
                             if let Some(path) = self

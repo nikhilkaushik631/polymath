@@ -4,7 +4,7 @@ Dictation and PDF read-aloud run on this Mac. By default, no speech service, acc
 
 ## Dictate into an editor
 
-The shared toolbar microphone works inside Polymath: click to start, then click to stop. It inserts into the selected Polymath field. Its language selection and last-transcript view are shared with global dictation.
+The toolbar microphone appears in Writer, Sheets, Slides and PDF Tools: click to start, then click to stop. It inserts into the selected editor field. It stays off Home and the read-only Reader view. Its language selection and last-transcript view are shared with global dictation.
 
 Click a text field in Writer, Sheets, Slides, a Reader form/comment, or another editable Polymath field. Click the microphone in the shared toolbar, speak, then click it again. Polymath transcribes the recording with its bundled multilingual Whisper model and sends the text to the selected field or editor. Settings → Voice retains the last transcript so you can copy it if a custom editor field does not accept paste. Use the gear to choose a language before recording. Automatic language detection is the default; selecting the language is more reliable for short recordings.
 
@@ -14,9 +14,9 @@ On first use, allow Polymath microphone access through the normal macOS prompt. 
 
 ## Dictate into another app
 
-Open **Settings → Voice → Dictate anywhere** and enable the shortcut. Select a text field in any Mac app, hold **right Command + right Option**, speak, then release either key. A small floating status indicator shows recording and local transcription. Polymath sends the result back to the app and field that were focused when recording started. The last transcript also appears in Polymath's Voice settings. Keep Polymath running to use the shortcut. Turn the setting off to stop the companion process immediately.
+Open **Settings → Voice → Dictate anywhere** and enable the shortcut. Select a text field in any Mac app, hold **Command + Option on either side of the keyboard**, speak, then release either key. A small floating status indicator shows recording and local transcription. Polymath sends the result back to the app and field that were focused when recording started. The last transcript also appears in Polymath's Voice settings. Keep Polymath running to use the shortcut. Turn the setting off to stop the companion process immediately.
 
-macOS may ask for **Input Monitoring**, **Accessibility**, and **Microphone** access for Polymath and its bundled helpers. Grant these in System Settings → Privacy & Security, then use **Retry shortcut**. Accessibility is needed to return to the original app and paste. If that fails, Polymath leaves the transcript on the clipboard for manual paste. The companion temporarily stages the transcript on the clipboard for Command-V and restores the prior clipboard items after the paste event if nothing else changed it. No speech data leaves this Mac; the WAV and text files are removed after transcription. The shortcut is fixed to the right-side keys in this version, and a conflicting global shortcut may intercept it.
+macOS may ask for **Input Monitoring**, **Accessibility**, and **Microphone** access for Polymath and its bundled helpers. Grant these in System Settings → Privacy & Security, then use **Retry shortcut**. Accessibility is needed to return to the original app and paste. If that fails, Polymath leaves the transcript on the clipboard for manual paste. The companion temporarily stages the transcript on the clipboard for Command-V and restores the prior clipboard items after the paste event if nothing else changed it. No speech data leaves this Mac; the WAV and text files are removed after transcription. Hold both keys briefly; a quick Command-Option-key shortcut will not start dictation. A conflicting global shortcut may still intercept the keys.
 
 ## Read a PDF aloud
 

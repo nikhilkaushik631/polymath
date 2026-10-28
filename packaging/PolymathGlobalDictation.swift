@@ -6,12 +6,12 @@ import Foundation
 // A small companion process keeps global keyboard and Accessibility permissions
 // together. It has no server, account, model runtime, or network connection.
 private final class DictationBridge {
-    private let rightCommand: CGKeyCode = 54
-    private let rightOption: CGKeyCode = 61
     private var monitor: Any?
     private var held = false
-    private var rightCommandHeld = false
-    private var rightOptionHeld = false
+    private var modifiersHeld = false
+    private var pending = false
+    private var pendingGeneration = 0
+    private var suppressedUntilRelease = false
     private var busy = false
     private var recorder: Process?
     private var recorderInput: Pipe?
@@ -74,42 +74,57 @@ private final class DictationBridge {
             return
         }
         if monitor == nil {
-            monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            monitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
                 if self?.hotkeyTest == true {
                     self?.send("status", "TEST_EVENT_\(event.keyCode)_\(event.modifierFlags.rawValue)")
                 }
-                self?.modifierChanged(event)
+                if event.type == .flagsChanged {
+                    self?.modifierChanged(event)
+                } else if event.type == .keyDown {
+                    if self?.pending == true {
+                        self?.suppressedUntilRelease = true
+                        self?.cancelPending()
+                    }
+                }
             }
             if monitor == nil {
                 send("status", "Could not watch the global shortcut. Re-enable Input Monitoring and restart Polymath.")
                 return
             }
             send("status", AXIsProcessTrusted()
-                ? "Ready · hold right ⌘ + right ⌥ in any app"
+                ? "Ready · hold ⌘ + ⌥ in any app"
                 : "Shortcut ready · allow Accessibility for automatic paste")
         }
     }
 
     private func modifierChanged(_ event: NSEvent) {
-        // A flagsChanged event names the exact left or right modifier that
-        // changed. Track those transitions directly; the generic event flags
-        // merge both sides and cannot identify a right-key release when the
-        // matching left key is also down.
-        if event.keyCode == rightCommand {
-            rightCommandHeld.toggle()
-        } else if event.keyCode == rightOption {
-            rightOptionHeld.toggle()
-        } else {
-            return
-        }
-        let both = rightCommandHeld && rightOptionHeld
-        if both && !held {
-            held = true
-            beginRecording()
-        } else if !both && held {
+        // macOS combines the left and right variants in modifierFlags. Accept
+        // either side, including a mixed pair. The short hold distinguishes
+        // dictation from ordinary Command-Option keyboard shortcuts.
+        modifiersHeld = event.modifierFlags.contains([.command, .option])
+        if modifiersHeld && !held && !pending && !suppressedUntilRelease {
+            pending = true
+            pendingGeneration += 1
+            let generation = pendingGeneration
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+                guard let self, self.pending, self.modifiersHeld,
+                      self.pendingGeneration == generation else { return }
+                self.pending = false
+                self.held = true
+                self.beginRecording()
+            }
+        } else if !modifiersHeld && held {
             held = false
             finishRecording()
+        } else if !modifiersHeld {
+            cancelPending()
+            suppressedUntilRelease = false
         }
+    }
+
+    private func cancelPending() {
+        pending = false
+        pendingGeneration += 1
     }
 
     private func focusedPID() -> pid_t? {
@@ -166,7 +181,7 @@ private final class DictationBridge {
         recorderError = errorOutput
         recordingURL = audio
         busy = true
-        send("status", "Listening · release right ⌘ or right ⌥ to insert")
+        send("status", "Listening · release ⌘ or ⌥ to insert")
         showPill("●  Listening · release to insert", color: .systemRed)
     }
 

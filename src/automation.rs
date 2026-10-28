@@ -351,7 +351,7 @@ impl Polymath {
                 control::ok(json!({
                     "enabled": self.global_dictation.enabled,
                     "status": self.global_dictation.status,
-                    "shortcut": "right Command + right Option",
+                    "shortcut": "Command + Option (either side)",
                 }))
             }
             "app.quit" => {

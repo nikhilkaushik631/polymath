@@ -1,4 +1,16 @@
-# Local validation — Polymath 0.4.17, 2026-10-28
+# Local validation — Polymath 0.4.18, 2026-10-28
+
+The editing toolbar microphone is now limited to Writer, Sheets, Slides and PDF Tools; Home, Reader, Images and Video no longer offer a click-to-dictate action with nowhere to put its result. The systemwide hold shortcut accepts Command + Option from either side of the keyboard, including mixed pairs. A short hold delay and key-down cancellation keep ordinary Command-Option-key shortcuts from starting a recording.
+
+The installed 0.4.17 helper received synthetic left Command and left Option events but never started dictation, confirming the reported failure: it listened only for the right-side keys. The revised helper observed start and stop with the left pair, and a quick Command-Option-key sequence produced no start. All 34 Rust tests passed, including an accessibility check of microphone visibility across every workspace; the debug app passed the global-helper lifecycle test. Live speech capture in an external app still needs a spoken user test after installation.
+
+The signed 0.4.18 bundle passed synthetic left-side shortcut detection, cross-app text insertion, helper lifecycle, and the full native smoke test. Home and Writer screenshots were inspected to confirm that the microphone is absent on Home and present in Writer. The DMG and bundle signature verified. The previous 0.4.17 app and installer are archived under `../installers/previous-versions/`. The installed 0.4.18 helper passed synthetic hold tests for both left and right Command + Option; `/Applications/Polymath.app` is running with the helper enabled. All 119 configured file defaults still resolve to Polymath. The installed executable and shared installer hashes match the tested files.
+
+Installed and signed-bundle executable SHA-256: `52ee07066992118abb8ae031fa1cd4499645b3361a9c2a374cd1d798ebc60155`
+
+DMG SHA-256: `2e9b3898f4c98313e79614dd89bdb4384c6a6975a5f155f1de172bc4cb737783`
+
+## Previous Polymath 0.4.17 validation — 2026-10-28
 
 Polymath now has an opt-in systemwide hold-to-dictate shortcut in Settings → Voice. Holding right Command + right Option starts the bundled native recorder; releasing either key runs the existing local Whisper model and sends the transcript to the app that had focus at recording start. The helper shows a small recording/transcription pill, preserves the clipboard after paste when possible, and falls back to copying the transcript if automatic insertion is unavailable. The helper exits when the setting is turned off or Polymath quits. It uses no network service and loads the speech model only after recording.
 

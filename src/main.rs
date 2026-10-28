@@ -1624,4 +1624,32 @@ mod tests {
         harness.run_steps(2);
         assert_eq!(harness.state().settings_page, settings::Page::Files);
     }
+
+    #[test]
+    fn toolbar_mic_appears_only_in_text_editing_workspaces() {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_eframe(|cc| app(&cc.egui_ctx));
+        for (workspace, expected) in [
+            (Workspace::Home, false),
+            (Workspace::Reader, false),
+            (Workspace::Writer, true),
+            (Workspace::Sheets, true),
+            (Workspace::Slides, true),
+            (Workspace::Tools, true),
+            (Workspace::Images, false),
+            (Workspace::Video, false),
+        ] {
+            harness.state_mut().next = Some(workspace);
+            harness.run_steps(5);
+            assert_eq!(harness.state().active, workspace);
+            assert_eq!(
+                harness
+                    .query_by_role_and_label(Role::Button, "Dictate into the selected text field")
+                    .is_some(),
+                expected,
+                "mic visibility in {workspace:?}"
+            );
+        }
+    }
 }
