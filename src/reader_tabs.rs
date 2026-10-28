@@ -2,7 +2,7 @@
 //! engine's save and recovery path; read-only previews keep their live viewer state in memory.
 
 use crate::{Polymath, Workspace, home_fonts, image_view, media_view, source_view};
-use egui::{Color32, RichText, Stroke, TextWrapMode, vec2};
+use egui::{Align, Color32, Layout, RichText, Stroke, TextWrapMode, vec2};
 use pdfcraft_engine::DocId;
 use serde_json::{Value, json};
 use std::path::Path;
@@ -414,13 +414,31 @@ impl Polymath {
         if tabs.is_empty() {
             return false;
         }
-        let chrome = crate::ui_kit::chrome(self.dark);
-        let accent = Workspace::Reader.accent(self.dark);
+        let dark = self.dark;
+        let chrome = crate::ui_kit::chrome(dark);
+        let accent = Workspace::Reader.accent(dark);
+        let integrated_source = self.source.is_some() && ui.available_width() >= 740.0;
+        if let Some(source) = self.source.as_mut() {
+            source.toolbar_in_tab = integrated_source;
+        }
+        let tab_strip_width = if integrated_source {
+            let content_width = tabs
+                .iter()
+                .map(|tab| {
+                    (compact_tab_title(&tab.title).chars().count() as f32 * 7.3).max(78.0) + 63.0
+                })
+                .sum::<f32>()
+                + tabs.len() as f32 * 5.0
+                + 38.0;
+            content_width.min((ui.available_width() - 365.0).max(200.0))
+        } else {
+            ui.available_width() - 18.0
+        };
         let mut selected = None;
         let mut closed = None;
         let mut open_requested = false;
         egui::Panel::top("polymath-reader-tabs")
-            .exact_size(38.0)
+            .exact_size(40.0)
             .frame(
                 egui::Frame::NONE
                     .fill(chrome.surface)
@@ -428,117 +446,145 @@ impl Polymath {
                     .inner_margin(egui::Margin::symmetric(9, 3)),
             )
             .show(ui, |ui| {
-                egui::ScrollArea::horizontal()
-                    .id_salt("reader-open-files")
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        ui.horizontal_centered(|ui| {
-                            ui.spacing_mut().item_spacing.x = 5.0;
-                            for tab in &tabs {
-                                let fill = if tab.active {
-                                    chrome
-                                        .surface
-                                        .lerp_to_gamma(accent, if self.dark { 0.20 } else { 0.11 })
-                                } else {
-                                    chrome.canvas
-                                };
-                                egui::Frame::NONE
-                                    .fill(fill)
-                                    .stroke(Stroke::new(
-                                        1.0,
-                                        if tab.active { accent } else { chrome.line },
-                                    ))
-                                    .corner_radius(8)
-                                    .inner_margin(egui::Margin::symmetric(4, 2))
-                                    .show(ui, |ui| {
-                                        ui.horizontal_centered(|ui| {
-                                            ui.spacing_mut().item_spacing.x = 2.0;
-                                            let title = compact_tab_title(&tab.title);
-                                            let icon = match tab.kind {
-                                                "Source" => "file-code",
-                                                "Image" => "image",
-                                                "Media" => "film",
-                                                _ => "file-text",
+                ui.horizontal_centered(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    ui.allocate_ui_with_layout(
+                        vec2(tab_strip_width.min(ui.available_width()), 32.0),
+                        Layout::left_to_right(Align::Center),
+                        |ui| {
+                            egui::ScrollArea::horizontal()
+                                .id_salt("reader-open-files")
+                                .auto_shrink([false, true])
+                                .show(ui, |ui| {
+                                    ui.horizontal_centered(|ui| {
+                                        ui.spacing_mut().item_spacing.x = 5.0;
+                                        for tab in &tabs {
+                                            let fill = if tab.active {
+                                                chrome.canvas
+                                            } else {
+                                                chrome.surface
                                             };
-                                            ui.add(pdfcraft_ui_egui::icons::image(
-                                                icon,
-                                                14.0,
-                                                if tab.active { accent } else { chrome.muted },
-                                            ));
-                                            if ui
-                                                .add(
-                                                    egui::Button::new(
-                                                        RichText::new(title).size(13.0).color(
+                                            let tab_frame = egui::Frame::NONE
+                                                .fill(fill)
+                                                .inner_margin(egui::Margin::symmetric(7, 3))
+                                                .show(ui, |ui| {
+                                                    ui.horizontal_centered(|ui| {
+                                                        ui.spacing_mut().item_spacing.x = 2.0;
+                                                        let title = compact_tab_title(&tab.title);
+                                                        let icon = match tab.kind {
+                                                            "Source" => "file-code",
+                                                            "Image" => "image",
+                                                            "Media" => "film",
+                                                            _ => "file-text",
+                                                        };
+                                                        ui.add(pdfcraft_ui_egui::icons::image(
+                                                            icon,
+                                                            14.0,
                                                             if tab.active {
                                                                 accent
                                                             } else {
-                                                                chrome.ink
+                                                                chrome.muted
                                                             },
-                                                        ),
-                                                    )
-                                                    .fill(Color32::TRANSPARENT)
-                                                    .stroke(Stroke::NONE)
-                                                    .wrap_mode(TextWrapMode::Extend)
-                                                    .min_size(vec2(78.0, 25.0)),
-                                                )
-                                                .on_hover_text(
-                                                    tab.path.as_deref().unwrap_or(&tab.title),
-                                                )
-                                                .clicked()
-                                            {
-                                                selected = Some(tab.id);
-                                            }
-                                            if tab.dirty {
-                                                ui.label(
-                                                    RichText::new("•").size(12.0).color(accent),
+                                                        ));
+                                                        if ui
+                                                            .add(
+                                                                egui::Button::new(
+                                                                    RichText::new(title)
+                                                                        .size(13.0)
+                                                                        .color(if tab.active {
+                                                                            chrome.ink
+                                                                        } else {
+                                                                            chrome.muted
+                                                                        }),
+                                                                )
+                                                                .fill(Color32::TRANSPARENT)
+                                                                .stroke(Stroke::NONE)
+                                                                .wrap_mode(TextWrapMode::Extend)
+                                                                .min_size(vec2(78.0, 25.0)),
+                                                            )
+                                                            .on_hover_text(
+                                                                tab.path
+                                                                    .as_deref()
+                                                                    .unwrap_or(&tab.title),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            selected = Some(tab.id);
+                                                        }
+                                                        if tab.dirty {
+                                                            ui.label(
+                                                                RichText::new("•")
+                                                                    .size(12.0)
+                                                                    .color(accent),
+                                                            );
+                                                        }
+                                                        let close_label =
+                                                            format!("Close {}", tab.title);
+                                                        let response = ui.add(
+                                                            egui::Button::image(
+                                                                pdfcraft_ui_egui::icons::image(
+                                                                    "x",
+                                                                    13.0,
+                                                                    chrome.muted,
+                                                                ),
+                                                            )
+                                                            .frame(false)
+                                                            .min_size(vec2(22.0, 24.0)),
+                                                        );
+                                                        response.widget_info(|| {
+                                                            egui::WidgetInfo::labeled(
+                                                                egui::WidgetType::Button,
+                                                                true,
+                                                                &close_label,
+                                                            )
+                                                        });
+                                                        if response
+                                                            .on_hover_text(close_label)
+                                                            .clicked()
+                                                        {
+                                                            closed = Some(tab.id);
+                                                        }
+                                                    });
+                                                });
+                                            if tab.active {
+                                                let rect = tab_frame.response.rect;
+                                                ui.painter().hline(
+                                                    rect.left()..=rect.right(),
+                                                    rect.bottom() - 1.0,
+                                                    Stroke::new(2.0, accent),
                                                 );
                                             }
-                                            let close_label = format!("Close {}", tab.title);
-                                            let response = ui.add(
-                                                egui::Button::image(
-                                                    pdfcraft_ui_egui::icons::image(
-                                                        "x",
-                                                        13.0,
-                                                        chrome.muted,
-                                                    ),
-                                                )
-                                                .frame(false)
-                                                .min_size(vec2(22.0, 24.0)),
-                                            );
-                                            response.widget_info(|| {
-                                                egui::WidgetInfo::labeled(
-                                                    egui::WidgetType::Button,
-                                                    true,
-                                                    &close_label,
-                                                )
-                                            });
-                                            if response.on_hover_text(close_label).clicked() {
-                                                closed = Some(tab.id);
-                                            }
+                                        }
+                                        let response = ui.add(
+                                            egui::Button::image(pdfcraft_ui_egui::icons::image(
+                                                "plus",
+                                                15.0,
+                                                chrome.muted,
+                                            ))
+                                            .frame(false)
+                                            .min_size(vec2(30.0, 28.0)),
+                                        );
+                                        response.widget_info(|| {
+                                            egui::WidgetInfo::labeled(
+                                                egui::WidgetType::Button,
+                                                true,
+                                                "Open file in a new Reader tab",
+                                            )
                                         });
+                                        open_requested = response
+                                            .on_hover_text("Open file in a new tab · ⌘O")
+                                            .clicked();
                                     });
-                            }
-                            let response = ui.add(
-                                egui::Button::image(pdfcraft_ui_egui::icons::image(
-                                    "plus",
-                                    15.0,
-                                    chrome.muted,
-                                ))
-                                .frame(false)
-                                .min_size(vec2(30.0, 28.0)),
-                            );
-                            response.widget_info(|| {
-                                egui::WidgetInfo::labeled(
-                                    egui::WidgetType::Button,
-                                    true,
-                                    "Open file in a new Reader tab",
-                                )
-                            });
-                            open_requested = response
-                                .on_hover_text("Open file in a new tab · ⌘O")
-                                .clicked();
-                        });
-                    });
+                                });
+                        },
+                    );
+                    if integrated_source {
+                        ui.separator();
+                        if let Some(source) = self.source.as_mut() {
+                            source_view::tab_toolbar(ui, source, dark);
+                        }
+                    }
+                });
             });
         let ctx = ui.ctx().clone();
         if let Some(id) = closed {

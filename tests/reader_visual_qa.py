@@ -85,8 +85,12 @@ with (OUT / "app.log").open("w") as log:
         screenshot("reader-tabs-and-source-dark")
         call("app.theme", {"dark": False})
         call("app.reader.favorite", {"value": True, "path": str(second)})
-        for path in (first, second, third):
+        for path in (first, second):
             call("app.reader.close", {"path": str(path)})
+        call("app.theme", {"dark": True})
+        screenshot("reader-single-source-dark")
+        call("app.theme", {"dark": False})
+        call("app.reader.close", {"path": str(third)})
         screenshot("reader-recent-and-favorite")
 
         video = OUT / "visual-audit-video-long.mp4"

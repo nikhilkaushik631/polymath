@@ -1,4 +1,16 @@
-# Local validation — Polymath 0.4.13, 2026-10-28
+# Local validation — Polymath 0.4.14, 2026-10-28
+
+Polymath 0.4.14 replaces the two stacked Reader source bars with one integrated file strip at normal window widths. The active file uses a flat editor tab with a Reader-blue underline; file type, line count, read-only hint, Find, Copy and Outline sit immediately beside the tabs. A narrow window retains a compact secondary row so the tabs and actions remain reachable. The source and rendered SVG preview now begin directly below the shared strip.
+
+The locked debug and optimized release builds passed. Native Reader visual QA passed on the signed release bundle. Screenshots of one SVG tab and three source tabs were inspected in dark mode; the QA also covered the light theme, Reader landing and video playback. The fixture uses the reported `wiredleap_id_card_vertical (1).svg` filename. `tests/native_smoke.py` passed its routing, preview, editing and quit-guard workflow with screenshot capture disabled; the focused Reader screenshots were captured separately. Rust formatting, Python syntax, and whitespace checks passed. No personal files were modified.
+
+The 0.4.14 app passed strict code-signature verification. `hdiutil verify` passed for the DMG, and `dist/Polymath.dmg` matches `../installers/Polymath.dmg`. The previous 0.4.13 app and installer were archived under `../installers/previous-versions/`. The installed app quit normally before replacement, and `/Applications/Polymath.app` is running 0.4.14 with an executable hash matching the tested bundle. A fresh Launch Services check confirmed all 119 configured document extensions resolve to the installed app; HTTP and HTTPS remain with the browser. The app is ad-hoc signed and is not Apple-notarized.
+
+Signed bundle and installed executable SHA-256: `42e0bfce839297523b32879d05c1ce6f21b0374a61925fbbefc25d2dc5ea28a5`
+
+DMG SHA-256: `c7ad228eb993aaae2113b17bf54f670cd4800275a3380627386f5466c5fd5e63`
+
+## Previous Polymath 0.4.13 validation — 2026-10-28
 
 Polymath 0.4.13 redesigns Reader's source bar. The open tab now carries the filename without a second, oversized title below it. The source toolbar is 43 points tall on a wide window and groups file type, line or table count, read-only state, search, copy and outline controls. Long tab labels allow 36 characters, enough to show `wiredleap_id_card_vertical (1).svg` in full. Narrow windows stack the controls in a 75-point bar. The copy and outline controls have accessible names and hover help.
 

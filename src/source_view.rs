@@ -49,6 +49,7 @@ pub struct SourceFile {
     pub query: String,
     last_query: String,
     jump_to_line: Option<usize>,
+    pub(crate) toolbar_in_tab: bool,
 }
 
 impl SourceFile {
@@ -110,6 +111,7 @@ impl SourceFile {
             query: String::new(),
             last_query: String::new(),
             jump_to_line: None,
+            toolbar_in_tab: false,
         })
     }
 
@@ -296,74 +298,34 @@ fn decode_utf16(bytes: &[u8], little_endian: bool) -> Result<String, String> {
 
 pub fn show(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) {
     let chrome = crate::ui_kit::chrome(dark);
-    let (canvas, panel, ink, muted, rule) = (
-        chrome.canvas,
-        chrome.surface,
-        chrome.ink,
-        chrome.muted,
-        chrome.line,
-    );
-    let accent = crate::Workspace::Reader.accent(dark);
-    let compact = ui.available_width() < 610.0;
-    let count = file.table.as_ref().map_or_else(
-        || format!("{} lines", file.line_count()),
-        |table| {
-            format!(
-                "{} rows · {} columns",
-                table.rows.len(),
-                table.headers.len()
-            )
-        },
-    );
-    egui::Panel::top("source-toolbar")
-        .exact_size(if compact { 75.0 } else { 43.0 })
-        .frame(
-            egui::Frame::new()
-                .fill(panel)
-                .inner_margin(egui::Margin::symmetric(14, 5))
-                .stroke(Stroke::new(1.0, rule)),
-        )
-        .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                ui.spacing_mut().item_spacing.x = 9.0;
+    let (canvas, panel, rule) = (chrome.canvas, chrome.surface, chrome.line);
+    if !file.toolbar_in_tab {
+        let compact = ui.available_width() < 610.0;
+        egui::Panel::top("source-toolbar")
+            .exact_size(if compact { 75.0 } else { 43.0 })
+            .frame(
                 egui::Frame::new()
-                    .fill(panel.lerp_to_gamma(accent, if dark { 0.19 } else { 0.09 }))
-                    .corner_radius(6)
-                    .inner_margin(egui::Margin::symmetric(8, 5))
-                    .show(ui, |ui| {
-                        ui.horizontal_centered(|ui| {
-                            ui.spacing_mut().item_spacing.x = 5.0;
-                            ui.add(pdfcraft_ui_egui::icons::image("file-code", 13.0, accent));
-                            ui.label(
-                                RichText::new(&file.language)
-                                    .size(11.5)
-                                    .strong()
-                                    .color(accent),
-                            );
-                        });
+                    .fill(panel)
+                    .inner_margin(egui::Margin::symmetric(14, 5))
+                    .stroke(Stroke::new(1.0, rule)),
+            )
+            .show(ui, |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    source_details(ui, file, dark);
+                    if !compact {
+                        ui.add_space(12.0);
+                        source_actions(ui, file, dark, 160.0);
+                    }
+                });
+                if compact {
+                    ui.add_space(5.0);
+                    ui.horizontal_centered(|ui| {
+                        source_actions(ui, file, dark, 118.0);
                     });
-                ui.label(RichText::new(&count).size(12.0).color(ink));
-                ui.label(RichText::new("Read only").size(12.0).color(muted));
-                if !compact {
-                    ui.allocate_ui_with_layout(
-                        vec2(ui.available_width(), 30.0),
-                        Layout::right_to_left(Align::Center),
-                        |ui| source_actions(ui, file, dark, 170.0),
-                    );
                 }
             });
-            if compact {
-                ui.add_space(5.0);
-                ui.allocate_ui_with_layout(
-                    vec2(ui.available_width(), 30.0),
-                    Layout::right_to_left(Align::Center),
-                    |ui| {
-                        let search_width = (ui.available_width() - 88.0).clamp(100.0, 170.0);
-                        source_actions(ui, file, dark, search_width);
-                    },
-                );
-            }
-        });
+    }
 
     if file.query != file.last_query {
         file.last_query = file.query.clone();
@@ -428,6 +390,32 @@ pub fn show(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) {
                 viewer.document(ui);
             }
         });
+}
+
+pub(crate) fn tab_toolbar(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool) {
+    ui.horizontal_centered(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        source_details(ui, file, dark);
+        ui.separator();
+        source_actions(ui, file, dark, 144.0);
+    });
+}
+
+fn source_details(ui: &mut egui::Ui, file: &SourceFile, dark: bool) {
+    let chrome = crate::ui_kit::chrome(dark);
+    let count = file.table.as_ref().map_or_else(
+        || format!("{} lines", file.line_count()),
+        |table| format!("{} rows", table.rows.len()),
+    );
+    ui.label(
+        RichText::new(&file.language)
+            .size(11.5)
+            .strong()
+            .color(crate::Workspace::Reader.accent(dark)),
+    );
+    ui.label(RichText::new(count).size(11.5).color(chrome.muted));
+    ui.add(pdfcraft_ui_egui::icons::image("lock", 11.0, chrome.muted))
+        .on_hover_text("Read only");
 }
 
 fn table_preview(ui: &mut egui::Ui, table: &DelimitedTable, dark: bool) {
@@ -748,6 +736,22 @@ impl SourceViewer<'_> {
 fn source_actions(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool, search_width: f32) {
     let theme = crate::ui_kit::theme(dark, crate::Workspace::Reader);
     let chrome = crate::ui_kit::chrome(dark);
+    egui_shadcn::input_with_props(
+        ui,
+        &theme,
+        egui_shadcn::InputProps::new("source-find", &mut file.query)
+            .placeholder("Find in file")
+            .width(search_width),
+    );
+    let copy = ui.add(
+        egui::Button::image(pdfcraft_ui_egui::icons::image("copy", 15.0, chrome.ink))
+            .min_size(vec2(29.0, 29.0))
+            .corner_radius(6),
+    );
+    copy.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Copy source"));
+    if copy.on_hover_text("Copy source").clicked() {
+        ui.ctx().copy_text(file.text.clone());
+    }
     if !file.symbols.is_empty() {
         let label = if file.show_outline {
             "Hide outline"
@@ -772,22 +776,6 @@ fn source_actions(ui: &mut egui::Ui, file: &mut SourceFile, dark: bool, search_w
             file.show_outline = !file.show_outline;
         }
     }
-    let copy = ui.add(
-        egui::Button::image(pdfcraft_ui_egui::icons::image("copy", 15.0, chrome.ink))
-            .min_size(vec2(29.0, 29.0))
-            .corner_radius(6),
-    );
-    copy.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Copy source"));
-    if copy.on_hover_text("Copy source").clicked() {
-        ui.ctx().copy_text(file.text.clone());
-    }
-    egui_shadcn::input_with_props(
-        ui,
-        &theme,
-        egui_shadcn::InputProps::new("source-find", &mut file.query)
-            .placeholder("Find in file")
-            .width(search_width),
-    );
 }
 
 #[cfg(test)]
