@@ -12,6 +12,7 @@ mod audio;
 mod automation;
 mod control;
 mod file_dialogs;
+mod global_dictation;
 mod home;
 mod home_fonts;
 mod home_view;
@@ -80,6 +81,7 @@ struct Polymath {
     notice: Option<String>,
     external_link: Option<String>,
     voice: voice::Voice,
+    global_dictation: global_dictation::GlobalDictation,
     settings_page: settings::Page,
     quit_requested: bool,
     force_quit: bool,
@@ -187,6 +189,7 @@ impl Polymath {
             notice: None,
             external_link: None,
             voice: voice::Voice::default(),
+            global_dictation: global_dictation::GlobalDictation::default(),
             settings_page: settings::Page::default(),
             quit_requested: false,
             force_quit: false,
@@ -232,6 +235,10 @@ impl Polymath {
         }
         app.apply_theme();
         app.home_theme(ctx);
+        if app.global_dictation.enabled {
+            app.global_dictation
+                .set_enabled(true, ctx, &app.voice.language);
+        }
         app
     }
 
@@ -949,6 +956,15 @@ impl eframe::App for Polymath {
             }
         }
         self.video_editor.tick(ctx);
+        if let Some(result) = self.global_dictation.poll() {
+            self.voice.last_transcript = result.text;
+            self.voice.notice = if result.pasted {
+                "Global dictation inserted in the focused app.".into()
+            } else {
+                "Global dictation copied to the clipboard. Paste it where you want it.".into()
+            };
+        }
+        self.global_dictation.sync_language(&self.voice.language);
         if self
             .reading_memory
             .sync(&mut self.reader, &self.office_previews)

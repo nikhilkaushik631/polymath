@@ -342,6 +342,18 @@ impl Polymath {
                     json!({"visible":self.voice.panel_open,"page":format!("{:?}",self.settings_page).to_lowercase()}),
                 )
             }
+            "app.dictation.global" => {
+                if let Some(enabled) = p.get("enabled").and_then(Value::as_bool) {
+                    self.global_dictation
+                        .set_enabled(enabled, ctx, &self.voice.language);
+                    self.save_preferences();
+                }
+                control::ok(json!({
+                    "enabled": self.global_dictation.enabled,
+                    "status": self.global_dictation.status,
+                    "shortcut": "right Command + right Option",
+                }))
+            }
             "app.quit" => {
                 self.quit_requested = true;
                 control::ok(json!({"requested":true,"dirtyWorkspaces":self.dirty_workspaces()}))

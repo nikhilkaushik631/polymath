@@ -1,4 +1,16 @@
-# Local validation — Polymath 0.4.16, 2026-10-28
+# Local validation — Polymath 0.4.17, 2026-10-28
+
+Polymath now has an opt-in systemwide hold-to-dictate shortcut in Settings → Voice. Holding right Command + right Option starts the bundled native recorder; releasing either key runs the existing local Whisper model and sends the transcript to the app that had focus at recording start. The helper shows a small recording/transcription pill, preserves the clipboard after paste when possible, and falls back to copying the transcript if automatic insertion is unavailable. The helper exits when the setting is turned off or Polymath quits. It uses no network service and loads the speech model only after recording.
+
+The Swift helper compiled and its synthetic modifier-key check observed start and stop. A separate native text editor received a transcript through the helper's paste path, both before and after signing. The authenticated Polymath lifecycle test passed with the signed app: enable, permission/ready status, disable. The focused Rust event-parser test, formatting, Python syntax, whitespace check, optimized locked build and full native smoke test passed. The native screenshot `target/native-qa/global-dictation-settings.png` was inspected; the new Voice card, switch and shortcut instructions fit inside Settings. Live microphone recording and insertion into individual third-party editors still require a real user-granted dictation session.
+
+The signed bundle and DMG verified. The prior 0.4.16 app and DMG are archived under `../installers/previous-versions/`. `/Applications/Polymath.app` was installed and launched; its saved preference enables global dictation, its helper runs and reports “Ready,” and its signed executable hash matches the tested bundle. A new Launch Services process confirmed all 119 configured document extensions resolve to the installed app, while website links remain with the browser. The shared installer copy matches `dist/Polymath.dmg`.
+
+Installed and signed-bundle executable SHA-256: `5b8f2b894fa9e60b5b8de56856fc7e69408eba81261101411198753f43e723ba`
+
+DMG SHA-256: `15fda4bc4178bb933471d99ed3fc613cead74feaaa83db01d2f61c167d351e9d`
+
+## Previous Polymath 0.4.16 validation — 2026-10-28
 
 Recent files are checked on launch and at most once every three seconds when the UI updates. Paths that no longer point to files are removed from Home, Reader, and the Reader/Writer/Sheets/Slides editor histories, then the cleaned lists are saved. Clicking a stale Recent row before the next check removes it without a file-not-found popup. Favorites are kept separately so an unavailable volume can be reconnected without losing pins. Open Reader tabs and document data are not changed.
 

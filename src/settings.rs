@@ -313,6 +313,59 @@ impl Polymath {
         });
         ui.add_space(12.0);
         settings_card(ui, self.dark, |ui| {
+            ui.label(RichText::new("Dictate anywhere").size(15.0).strong());
+            ui.add_space(5.0);
+            ui.label(
+                RichText::new("Hold right ⌘ + right ⌥ while a text field is selected in any app. Release either key to transcribe and insert.")
+                    .size(12.0)
+                    .color(muted),
+            );
+            ui.add_space(10.0);
+            let mut enabled = self.global_dictation.enabled;
+            let switch_theme = crate::ui_kit::theme(self.dark, Workspace::Reader);
+            egui_shadcn::switch_with_props(
+                ui,
+                &switch_theme,
+                egui_shadcn::SwitchProps::new(
+                    egui::Id::new("polymath-global-dictation"),
+                    &mut enabled,
+                    "Enable shortcut",
+                )
+                .accent(Workspace::Reader.accent(self.dark)),
+            );
+            if enabled != self.global_dictation.enabled {
+                self.global_dictation
+                    .set_enabled(enabled, ui.ctx(), &self.voice.language);
+                self.save_preferences();
+            }
+            ui.add_space(7.0);
+            ui.label(
+                RichText::new(&self.global_dictation.status)
+                    .size(12.0)
+                    .color(muted),
+            );
+            if enabled {
+                ui.add_space(5.0);
+                if egui_shadcn::Button::new("Retry shortcut")
+                    .variant(egui_shadcn::ButtonVariant::Ghost)
+                    .size(egui_shadcn::ButtonSize::Sm)
+                    .show(ui, &switch_theme)
+                    .clicked()
+                {
+                    self.global_dictation
+                        .set_enabled(false, ui.ctx(), &self.voice.language);
+                    self.global_dictation
+                        .set_enabled(true, ui.ctx(), &self.voice.language);
+                }
+                ui.label(
+                    RichText::new("macOS may ask for Input Monitoring and Accessibility access. Polymath stays open in the background; speech stays on this Mac.")
+                        .size(11.5)
+                        .color(muted),
+                );
+            }
+        });
+        ui.add_space(12.0);
+        settings_card(ui, self.dark, |ui| {
             ui.label(RichText::new("PDF read aloud").size(15.0).strong());
             let active_pdf = (self.active == Workspace::Tools
                 || (self.active == Workspace::Reader

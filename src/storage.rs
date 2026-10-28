@@ -20,6 +20,7 @@ struct Preferences {
     slides: deckcraft_ui_egui::UiState,
     images: Option<lightcraft_ui_egui::state::UiState>,
     voice_language: String,
+    global_dictation: bool,
     narration_voice: String,
 }
 fn path() -> Option<PathBuf> {
@@ -95,6 +96,7 @@ impl Polymath {
         {
             self.voice.language = p.voice_language;
         }
+        self.global_dictation.enabled = p.global_dictation;
         if self
             .voice
             .voices
@@ -122,6 +124,7 @@ impl Polymath {
             slides: self.slides.ui.clone(),
             images: Some(self.images.ui.clone()),
             voice_language: self.voice.language.clone(),
+            global_dictation: self.global_dictation.enabled,
             narration_voice: self.voice.voice.clone(),
         };
         let result = (|| -> Result<(), Box<dyn std::error::Error>> {

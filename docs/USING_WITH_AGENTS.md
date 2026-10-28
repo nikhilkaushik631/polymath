@@ -72,6 +72,7 @@ Full engine/control references remain in the sibling projects:
 | `app.image.fullscreen` | `{enabled: bool}` | Enter or leave the active read-only image's full-screen view |
 | `app.theme` | `{dark:true/false}` | Select the shared light/dark theme |
 | `app.settings` | `{page:"appearance"/"voice"/"files",visible:true/false}` | Open or close the shared Settings window for inspection; omitted fields open the current page |
+| `app.dictation.global` | `{enabled?: bool}` | Inspect or change the opt-in systemwide hold-to-dictate shortcut; only enabled in an authorized app session |
 | `app.folders.choose` | `{}` | Show the native chooser; owner must answer |
 | `app.folders.list` | `{}` | Already selected folders and available listings |
 | `app.folders.remove` | `{path}` | Stop listing; files are untouched |
