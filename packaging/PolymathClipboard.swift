@@ -232,6 +232,10 @@ private enum ClipStyle {
     static let muted = Color(red: 0.63, green: 0.68, blue: 0.71)
 }
 
+private final class ClipboardHostingView<Content: View>: NSHostingView<Content> {
+    override var safeAreaInsets: NSEdgeInsets { NSEdgeInsetsZero }
+}
+
 private struct ClipPanelView: View {
     @ObservedObject var library: ClipLibrary
     let targetName: String
@@ -650,7 +654,7 @@ private final class ClipboardBridge {
             window.hasShadow = true
             panel = window
         }
-        panel?.contentView = NSHostingView(rootView: view)
+        panel?.contentView = ClipboardHostingView(rootView: view)
         panel?.center()
         panel?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
