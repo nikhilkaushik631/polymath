@@ -18,5 +18,6 @@ For UI implementation and compatible egui libraries, see [Native UI stack](UI_ST
 | Media | [Media](MEDIA.md) | Local audio/video player, supported codecs and open-source options |
 | Video editor | [Video editor](VIDEO_EDITOR.md) | Trim and arrange clips, manage audio, compress and export an MP4 |
 | Voice | [Voice](VOICE.md) | Dictation, Indian-language choices, PDF narration |
+| Clipboard History | [Clipboard History](CLIPBOARD_HISTORY.md) | Global shortcut, pinned clips, search, privacy and Raycast migration limits |
 
 For coding tools, start with [CODEX.md](../CODEX.md) or the [shared Claude/Codex guide](USING_WITH_AGENTS.md). The [architecture](ARCHITECTURE.md) explains the combined process, the [validation record](VALIDATION.md) lists tested behavior and limits, and the [upstream feature check](UPSTREAM_STATUS.md) records additions in the original repositories. These guides describe Polymath's combined UI; each linked sibling repository retains its own deeper engine and command documentation.

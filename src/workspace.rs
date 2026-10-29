@@ -101,6 +101,9 @@ impl Workspace {
     }
 }
 pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "webm", "mkv"];
+pub const AUDIO_EXTENSIONS: &[&str] = &[
+    "mp3", "m4a", "aac", "wav", "aiff", "aif", "caf", "flac", "ogg", "opus",
+];
 
 pub fn is_video_path(path: &Path) -> bool {
     path.extension()

@@ -39,7 +39,7 @@ try:
  assert call('app.inspect')['workspace']=='home'
  assert call('app.folders.list')['folders']==[]
  shot('home-light')
- for page in ('appearance','voice','files'):
+ for page in ('appearance','voice','clipboard','files'):
   assert call('app.settings',{'page':page})=={'visible':True,'page':page}
   shot('settings-'+page+'-light')
  call('app.theme',{'dark':True});call('app.settings',{'page':'appearance'});shot('settings-appearance-dark')

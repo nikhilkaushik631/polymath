@@ -7,6 +7,7 @@ pub(crate) enum Page {
     #[default]
     Appearance,
     Voice,
+    Clipboard,
     Files,
 }
 
@@ -15,6 +16,7 @@ impl Page {
         match value {
             "appearance" => Some(Self::Appearance),
             "voice" => Some(Self::Voice),
+            "clipboard" => Some(Self::Clipboard),
             "files" => Some(Self::Files),
             _ => None,
         }
@@ -24,6 +26,7 @@ impl Page {
         match self {
             Self::Appearance => "Appearance",
             Self::Voice => "Voice",
+            Self::Clipboard => "Clipboard",
             Self::Files => "Files & privacy",
         }
     }
@@ -31,6 +34,7 @@ impl Page {
         match self {
             Self::Appearance => "palette",
             Self::Voice => "mic",
+            Self::Clipboard => "copy",
             Self::Files => "folder",
         }
     }
@@ -101,7 +105,7 @@ impl Polymath {
                         ui.add_space(8.0);
                         ui.label(RichText::new("Preferences").size(11.5).color(muted));
                         ui.add_space(12.0);
-                        for page in [Page::Appearance, Page::Voice, Page::Files] {
+                        for page in [Page::Appearance, Page::Voice, Page::Clipboard, Page::Files] {
                             let icon = pdfcraft_ui_egui::icons::image(
                                 page.icon(),
                                 16.0,
@@ -164,6 +168,7 @@ impl Polymath {
                             .show(ui, |ui| match self.settings_page {
                                 Page::Appearance => self.appearance_settings(ui, ctx, muted),
                                 Page::Voice => self.voice_settings(ui, muted),
+                                Page::Clipboard => self.clipboard_settings(ui, ctx, muted),
                                 Page::Files => self.file_settings(ui, frame, ctx, muted),
                             });
                     });
@@ -242,6 +247,125 @@ impl Polymath {
             });
             ui.label(
                 RichText::new("Turns off card transitions and animated focus scrolling.")
+                    .size(12.0)
+                    .color(muted),
+            );
+        });
+    }
+
+    fn clipboard_settings(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, muted: Color32) {
+        let chrome = crate::ui_kit::chrome(self.dark);
+        let accent = Workspace::Reader.accent(self.dark);
+        let switch_theme = crate::ui_kit::theme(self.dark, Workspace::Reader);
+        heading(
+            ui,
+            "Clipboard History",
+            "Your pinned clips and recent copies, ready in any app.",
+            muted,
+        );
+        ui.add_space(18.0);
+        settings_card(ui, self.dark, |ui| {
+            ui.horizontal(|ui| {
+                ui.add(pdfcraft_ui_egui::icons::image("copy", 21.0, accent));
+                ui.label(RichText::new("Capture copies").size(15.0).strong());
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let mut enabled = self.clipboard_history.enabled;
+                    egui_shadcn::switch_with_props(
+                        ui,
+                        &switch_theme,
+                        egui_shadcn::SwitchProps::new(
+                            egui::Id::new("polymath-clipboard-enabled"),
+                            &mut enabled,
+                            "Clipboard History",
+                        )
+                        .accent(accent),
+                    );
+                    if enabled != self.clipboard_history.enabled {
+                        self.clipboard_history.set_enabled(enabled, ctx);
+                        self.save_preferences();
+                    }
+                });
+            });
+            ui.add_space(7.0);
+            ui.label(
+                RichText::new("Text, images and file links are saved locally. Pinned clips stay above recent copies.")
+                    .size(12.0)
+                    .color(muted),
+            );
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(&self.clipboard_history.status)
+                        .size(11.5)
+                        .color(if self.clipboard_history.status.starts_with("Ready") {
+                            accent
+                        } else {
+                            chrome.muted
+                        }),
+                );
+            });
+        });
+        ui.add_space(12.0);
+        settings_card(ui, self.dark, |ui| {
+            ui.label(RichText::new("Global shortcut").size(15.0).strong());
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                shortcut_key(ui, &self.clipboard_history.display_shortcut(), self.dark);
+                ui.add_space(8.0);
+                if ui
+                    .button(if self.clipboard_history.recording_shortcut {
+                        "Press a shortcut…"
+                    } else {
+                        "Change shortcut"
+                    })
+                    .clicked()
+                {
+                    self.clipboard_history.recording_shortcut =
+                        !self.clipboard_history.recording_shortcut;
+                }
+            });
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new("Use ⌘, ⌥ or ⌃ with a letter or number. The assigned key opens this panel over the active app.")
+                    .size(12.0)
+                    .color(muted),
+            );
+            if self.clipboard_history.recording_shortcut {
+                let events = ui.input(|input| input.events.clone());
+                for event in events {
+                    if let egui::Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } = event
+                    {
+                        if key == egui::Key::Escape {
+                            self.clipboard_history.recording_shortcut = false;
+                        } else if let Some(shortcut) = clipboard_shortcut(key, modifiers) {
+                            self.clipboard_history.set_shortcut(shortcut);
+                            self.clipboard_history.recording_shortcut = false;
+                            self.save_preferences();
+                        }
+                    }
+                }
+            }
+        });
+        ui.add_space(12.0);
+        settings_card(ui, self.dark, |ui| {
+            ui.label(RichText::new("Open your clips").size(15.0).strong());
+            ui.add_space(8.0);
+            if egui_shadcn::Button::new("Open Clipboard History")
+                .variant(egui_shadcn::ButtonVariant::Solid)
+                .show(ui, &switch_theme)
+                .clicked()
+            {
+                self.clipboard_history.show(ctx);
+                self.save_preferences();
+            }
+            ui.add_space(9.0);
+            ui.label(
+                RichText::new("The panel has search, type filters, preview, Pin, Copy, Paste and Clear recents. Password-manager clips marked concealed are skipped.")
                     .size(12.0)
                     .color(muted),
             );
@@ -770,6 +894,42 @@ fn shortcut_key(ui: &mut egui::Ui, key: &str, dark: bool) {
         .show(ui, |ui| {
             ui.label(RichText::new(key).size(13.0).strong());
         });
+}
+
+fn clipboard_shortcut(key: egui::Key, modifiers: egui::Modifiers) -> Option<String> {
+    if !modifiers.command && !modifiers.alt && !modifiers.ctrl {
+        return None;
+    }
+    let raw = format!("{key:?}").to_ascii_lowercase();
+    let letter = if raw.len() == 1
+        && raw
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric())
+    {
+        raw
+    } else if let Some(digit) = raw.strip_prefix("num")
+        && digit.len() == 1
+        && digit.chars().all(|character| character.is_ascii_digit())
+    {
+        digit.to_owned()
+    } else {
+        return None;
+    };
+    let mut parts = Vec::new();
+    if modifiers.ctrl {
+        parts.push("ctrl");
+    }
+    if modifiers.alt {
+        parts.push("option");
+    }
+    if modifiers.shift {
+        parts.push("shift");
+    }
+    if modifiers.command {
+        parts.push("cmd");
+    }
+    parts.push(&letter);
+    Some(parts.join("+"))
 }
 
 fn open_privacy_pane(pane: &str) -> Result<(), String> {

@@ -21,7 +21,19 @@ struct Preferences {
     images: Option<lightcraft_ui_egui::state::UiState>,
     voice_language: String,
     global_dictation: bool,
+    #[serde(default = "clipboard_enabled_default")]
+    clipboard_enabled: bool,
+    #[serde(default = "clipboard_shortcut_default")]
+    clipboard_shortcut: String,
     narration_voice: String,
+}
+
+fn clipboard_enabled_default() -> bool {
+    true
+}
+
+fn clipboard_shortcut_default() -> String {
+    "cmd+d".into()
 }
 fn path() -> Option<PathBuf> {
     if cfg!(test)
@@ -97,6 +109,12 @@ impl Polymath {
             self.voice.language = p.voice_language;
         }
         self.global_dictation.enabled = p.global_dictation;
+        self.clipboard_history.enabled = p.clipboard_enabled;
+        self.clipboard_history.shortcut = if p.clipboard_shortcut.is_empty() {
+            clipboard_shortcut_default()
+        } else {
+            p.clipboard_shortcut
+        };
         if self
             .voice
             .voices
@@ -125,6 +143,8 @@ impl Polymath {
             images: Some(self.images.ui.clone()),
             voice_language: self.voice.language.clone(),
             global_dictation: self.global_dictation.enabled,
+            clipboard_enabled: self.clipboard_history.enabled,
+            clipboard_shortcut: self.clipboard_history.shortcut.clone(),
             narration_voice: self.voice.voice.clone(),
         };
         let result = (|| -> Result<(), Box<dyn std::error::Error>> {

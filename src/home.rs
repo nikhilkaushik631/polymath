@@ -150,6 +150,23 @@ impl Polymath {
                         {
                             self.voice.panel_open = !self.voice.panel_open;
                         }
+                        if crate::theme_button::icon(
+                            ui,
+                            "copy",
+                            "Clipboard History",
+                            self.dark,
+                            false,
+                            self.active.accent(self.dark),
+                        )
+                        .on_hover_text(format!(
+                            "Open Clipboard History · {}",
+                            self.clipboard_history.display_shortcut()
+                        ))
+                        .clicked()
+                        {
+                            self.clipboard_history.show(&ctx);
+                            self.save_preferences();
+                        }
                         if matches!(
                             self.active,
                             Workspace::Tools
@@ -297,6 +314,10 @@ impl Polymath {
             }
             Some(home_view::Action::OpenArchiveDialog) => {
                 self.pick_filtered(false, frame, &ctx, crate::archive_view::EXTENSIONS);
+                Ok(())
+            }
+            Some(home_view::Action::OpenMusicDialog) => {
+                self.pick_filtered(false, frame, &ctx, crate::workspace::AUDIO_EXTENSIONS);
                 Ok(())
             }
             Some(home_view::Action::ChooseFolder) => {

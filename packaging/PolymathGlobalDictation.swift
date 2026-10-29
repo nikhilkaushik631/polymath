@@ -404,18 +404,27 @@ private final class DictationBridge {
     }
 }
 
-if CommandLine.arguments.contains("--self-test") {
-    // The helper must be able to run without either privacy permission so
-    // packaging can validate its executable and model paths safely.
-    print("Polymath global dictation helper ready")
-} else if let index = CommandLine.arguments.firstIndex(of: "--test-paste"),
-          CommandLine.arguments.indices.contains(index + 1) {
-    DictationBridge(language: "auto", parentPID: 0)
-        .testPaste(CommandLine.arguments[index + 1])
-} else {
-    let args = CommandLine.arguments
-    let language = args.count > 1 ? args[1] : "auto"
-    let parent = args.count > 2 ? pid_t(args[2]) ?? 0 : 0
-    DictationBridge(language: language, parentPID: parent,
-                    hotkeyTest: args.contains("--test-hotkey")).run()
+@main
+private struct PolymathHelperMain {
+    static func main() {
+        let args = CommandLine.arguments
+        if args.contains("--clipboard-self-test") {
+            print(testPolymathClipboard() ? "PASS: clipboard persistence and pinning" : "FAIL: clipboard history")
+        } else if args.contains("--self-test") {
+            // The helper must be able to run without either privacy permission.
+            print("Polymath global dictation helper ready")
+        } else if let index = args.firstIndex(of: "--test-paste"),
+                  args.indices.contains(index + 1) {
+            DictationBridge(language: "auto", parentPID: 0).testPaste(args[index + 1])
+        } else if args.count > 1 && args[1] == "--clipboard" {
+            let parent = args.count > 2 ? pid_t(args[2]) ?? 0 : 0
+            let shortcut = args.count > 3 ? args[3] : "cmd+d"
+            runPolymathClipboard(parentPID: parent, shortcut: shortcut)
+        } else {
+            let language = args.count > 1 ? args[1] : "auto"
+            let parent = args.count > 2 ? pid_t(args[2]) ?? 0 : 0
+            DictationBridge(language: language, parentPID: parent,
+                            hotkeyTest: args.contains("--test-hotkey")).run()
+        }
+    }
 }

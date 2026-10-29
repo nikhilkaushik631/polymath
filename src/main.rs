@@ -11,6 +11,7 @@
 mod archive_view;
 mod audio;
 mod automation;
+mod clipboard_history;
 mod control;
 mod file_dialogs;
 mod global_dictation;
@@ -84,6 +85,7 @@ struct Polymath {
     external_link: Option<String>,
     voice: voice::Voice,
     global_dictation: global_dictation::GlobalDictation,
+    clipboard_history: clipboard_history::ClipboardHistory,
     settings_page: settings::Page,
     quit_requested: bool,
     force_quit: bool,
@@ -193,6 +195,7 @@ impl Polymath {
             external_link: None,
             voice: voice::Voice::default(),
             global_dictation: global_dictation::GlobalDictation::default(),
+            clipboard_history: clipboard_history::ClipboardHistory::default(),
             settings_page: settings::Page::default(),
             quit_requested: false,
             force_quit: false,
@@ -241,6 +244,13 @@ impl Polymath {
         if app.global_dictation.enabled {
             app.global_dictation
                 .set_enabled(true, ctx, &app.voice.language);
+        }
+        if app.clipboard_history.enabled
+            && std::env::var_os("POLYMATH_NO_PREFS").is_none()
+            && std::env::var_os("IRIS_NO_PREFS").is_none()
+            && !cfg!(test)
+        {
+            app.clipboard_history.start(ctx);
         }
         app
     }
@@ -996,6 +1006,7 @@ impl eframe::App for Polymath {
             };
         }
         self.global_dictation.sync_language(&self.voice.language);
+        self.clipboard_history.poll();
         if self
             .reading_memory
             .sync(&mut self.reader, &self.office_previews)

@@ -13,6 +13,9 @@ mod workspace;
 
 use egui::{Vec2, accesskit::Role, vec2};
 #[allow(dead_code)]
+#[path = "../src/archive_view.rs"]
+mod archive_view;
+#[allow(dead_code)]
 #[path = "../src/home_fonts.rs"]
 mod home_fonts;
 #[path = "../src/theme_button.rs"]
@@ -339,6 +342,7 @@ fn workspace_cards_return_explicit_actions_without_opening_files() {
         ("Sheets", Action::Enter(Workspace::Sheets)),
         ("Slides", Action::Enter(Workspace::Slides)),
         ("Images", Action::Enter(Workspace::Images)),
+        ("Open Music", Action::OpenMusicDialog),
         ("Open a file", Action::OpenDialog),
         ("+ Add folder", Action::ChooseFolder),
     ] {

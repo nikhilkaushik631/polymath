@@ -7,6 +7,7 @@ The original assets below are contributor-original Polymath artwork, licensed un
 | assets/icons/archive.svg | Polymath contributors / original local SVG | MIT OR Apache-2.0 | 99173875d520f8ab740a92dc1cabc1cf6e4ce23d4a3a5c2d848090ebdb5379a1 | Archive entry and Reader tab symbol |
 | assets/icons/home.svg | Original project contributors / local SVG | MIT OR Apache-2.0 | 5b058e1f43effffebc882d71ed7f5e336f3edfbacf0721d18cf6476b9efbbba0 | Application / workspace icon |
 | assets/icons/images.svg | Polymath contributors / original local SVG | MIT OR Apache-2.0 | 3c0d1c667eec8b60297bae8b5645d9fd1532492bcb479d42313f434802397c27 | Images workspace symbol |
+| assets/icons/music.svg | Polymath contributors / original local SVG | MIT OR Apache-2.0 | e8cd19ceb89f877ab7459bf099940bdd1b20bce9f8d78b38215475736052548a | Music launch card symbol |
 | assets/icons/polymath-1024.png | Original project contributors / local SVG | MIT OR Apache-2.0 | 1b9a3ee6df90bbc15f71615285aa083668f464c08c023b933b9402648d405464 | Application / workspace icon |
 | assets/icons/polymath.icns | Original project contributors / local SVG | MIT OR Apache-2.0 | 708ff304a3d09d3510a766ec597482dbe440ab9c48bc669985169a5f74f11c35 | Application / workspace icon |
 | assets/icons/polymath.svg | Original project contributors / local SVG | MIT OR Apache-2.0 | 6f27e55ced86bdfb2ab30d9fd0e81c6a5fd4afac1213369938a1798fd6b22b36 | Application / workspace icon |

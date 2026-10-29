@@ -1,4 +1,18 @@
-# Local validation — Polymath 0.4.20, 2026-10-29
+# Local validation — Polymath 0.5.0, 2026-10-29
+
+Polymath adds a native systemwide Clipboard History panel with searchable text, image and file clips, pinned entries above recents, preview, copy/paste, and a configurable shortcut. This installation uses **Command+W** at the owner's request; Settings → Clipboard can change it to Command+D later. The helper stores bounded local history with owner-only file permissions and skips concealed/transient pasteboard types and common password-manager sources. Polymath does not separately encrypt its JSON/PNG history. Existing Raycast pinned clips were not migrated: the installed Raycast v1 database is encrypted and its supported export omits Clipboard History. Raycast was left installed and its pins were not changed.
+
+Home now has a Music entry beside Archives. It opens an audio-filtered file picker and routes a selected song into Reader's existing player and folder queue. A missing icon mapping was caught in native screenshot review and replaced with an original bundled SVG; the final light-mode Home screenshot shows the music note and action text. Settings shows the new Clipboard page and the 0.5.0 version label.
+
+All 39 Rust unit tests and 15 Home UI tests passed. The signed clipboard helper passed synthetic text, image and file persistence checks and registered Command+W. The final signed bundle passed `tests/native_smoke.py` for settings, document routing, media, editor handoff, save/reopen, and the unsaved-work quit guard. Rust formatting, Python and shell syntax checks, whitespace checks, strict bundle code-signature verification and DMG checksum verification passed. No personal clips were used in the tests or written to the repository.
+
+The previous 0.4.20 app and installer were archived under `../installers/previous-versions/`. `/Applications/Polymath.app` is running 0.5.0 with its Clipboard History helper launched as `--clipboard … cmd+w`; the saved preference matches. The installed executable and shared installer match the tested signed bundle and verified DMG. All 122 configured file defaults still resolve to the installed app.
+
+Installed and signed-bundle executable SHA-256: `50530f74a7a752c26862855a2a53f2785503b697997916e0dc3ed69013cf3f95`
+
+DMG SHA-256: `e312d722c2a2735bb4533bfa39d41acddd7c9fab0badda352f91f68bdc1a8d36`
+
+## Previous Polymath 0.4.20 validation — 2026-10-29
 
 ZIP, RAR and 7z files now open as independently closable Reader tabs. The archive view lists and filters contents, extracts all or selected regular files and folders to a new destination folder, reports progress, and supports cancellation. It skips links, traversal paths, wildcard names and duplicate output paths. A Home Archives card opens the archive picker. Extraction uses the macOS system libarchive tool on demand; it does not modify the source archive.
 
