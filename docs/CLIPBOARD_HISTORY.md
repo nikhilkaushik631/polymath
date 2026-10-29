@@ -1,6 +1,6 @@
 # Clipboard History
 
-Polymath keeps recent copies in a small native panel that can appear over another Mac app. Press **Command+D** to open it, or use the clipboard button in Polymath's top bar. Change the shortcut in **Settings → Clipboard** by pressing **Change shortcut** and then the new key combination. The shortcut needs Command, Option or Control plus one letter or number.
+Polymath keeps recent copies in a small native panel that can appear over another Mac app. Press the configured shortcut (Command+D by default), use the clipboard button in Polymath's top bar, or click the Polymath aperture icon in the macOS menu bar while Polymath is running. Change the shortcut in **Settings → Clipboard** by pressing **Change shortcut** and then the new key combination. The shortcut needs Command, Option or Control plus one letter or number.
 
 The panel lists **Pinned** clips above **Recent** clips. Search by content or source app, filter by text, image or file, select a row for preview, then press Return or **Paste** to insert it into the app that had focus. **Copy** puts it on the clipboard without pasting. **Pin** (or Command+.), **Unpin**, **Delete** and **Clear recents** manage the list; Clear recents keeps pinned clips. Esc closes the panel. Automatic paste needs macOS Accessibility permission for the bundled helper; without it, the chosen clip is copied and can be pasted with Command+V.
 

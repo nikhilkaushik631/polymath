@@ -504,7 +504,7 @@ private struct ClipPanelView: View {
     }
 }
 
-private final class ClipboardBridge {
+private final class ClipboardBridge: NSObject {
     private let parentPID: pid_t
     private let library: ClipLibrary
     private var shortcut: String
@@ -513,6 +513,7 @@ private final class ClipboardBridge {
     private var panel: NSPanel?
     private var localKeys: Any?
     private var target: NSRunningApplication?
+    private var statusItem: NSStatusItem?
 
     init(parentPID: pid_t, shortcut: String) {
         self.parentPID = parentPID
@@ -521,12 +522,14 @@ private final class ClipboardBridge {
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("Polymath/Clipboard History", isDirectory: true)
         library = ClipLibrary(folder: folder)
+        super.init()
     }
 
     func run() {
         let application = NSApplication.shared
         application.setActivationPolicy(.accessory)
         application.finishLaunching()
+        installStatusItem()
         installHotkey(shortcut)
         readCommands()
         Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in
@@ -538,6 +541,23 @@ private final class ClipboardBridge {
             self.library.capture()
         }
         application.run()
+    }
+
+    private func installStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        guard let button = item.button else { return }
+        let icon = NSImage(systemSymbolName: "camera.aperture", accessibilityDescription: "Polymath")
+        icon?.isTemplate = true
+        button.image = icon
+        button.imageScaling = .scaleProportionallyDown
+        button.toolTip = "Polymath · Open Clipboard History"
+        button.target = self
+        button.action = #selector(openFromStatusItem)
+        statusItem = item
+    }
+
+    @objc private func openFromStatusItem() {
+        toggle()
     }
 
     private func send(_ message: String) {
@@ -719,6 +739,7 @@ private final class ClipboardBridge {
     }
 
     private func shutdown() {
+        if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
         if let hotkey { UnregisterEventHotKey(hotkey) }
         if let handler { RemoveEventHandler(handler) }
         if let localKeys { NSEvent.removeMonitor(localKeys) }
