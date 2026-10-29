@@ -470,7 +470,11 @@ impl Polymath {
                     ),
                     DictationPhase::Accessibility => (
                         "Setup needed",
-                        "Accessibility is needed to paste into other apps.",
+                        if self.global_dictation.status.starts_with("Allow Accessibility") {
+                            "Accessibility is needed for the shortcut."
+                        } else {
+                            "Accessibility is needed to paste into other apps."
+                        },
                         if self.dark {
                             Color32::from_rgb(248, 199, 119)
                         } else {

@@ -2,10 +2,12 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import OSLog
 
 // A small companion process keeps global keyboard and Accessibility permissions
 // together. It has no server, account, model runtime, or network connection.
 private final class DictationBridge {
+    private let logger = Logger(subsystem: "local.polymath.app", category: "global-dictation")
     private var monitor: Any?
     private var held = false
     private var modifiersHeld = false
@@ -40,6 +42,7 @@ private final class DictationBridge {
         if kind == "status" {
             if lastStatus == message { return }
             lastStatus = message
+            logger.info("\(message, privacy: .public)")
         }
         var payload: [String: Any] = ["kind": kind, "text": message]
         for (key, value) in extra { payload[key] = value }
@@ -53,9 +56,13 @@ private final class DictationBridge {
         NSApplication.shared.setActivationPolicy(.accessory)
         makePanel()
         installInputCommands()
-        _ = CGRequestListenEventAccess()
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+        // Accessibility already grants event listening as well as the ability
+        // to insert the transcript. Asking for Input Monitoring unconditionally
+        // can leave this helper waiting on a second, unnecessary TCC grant.
+        if !AXIsProcessTrustedWithOptions(options) {
+            _ = CGRequestListenEventAccess()
+        }
         checkPermissions()
         Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -69,8 +76,10 @@ private final class DictationBridge {
     }
 
     private func checkPermissions() {
-        if !CGPreflightListenEventAccess() {
-            send("status", "Allow Input Monitoring for Polymath in macOS Privacy & Security, then turn this setting off and on again.")
+        let accessibility = AXIsProcessTrusted()
+        let inputMonitoring = CGPreflightListenEventAccess()
+        if !accessibility && !inputMonitoring {
+            send("status", "Allow Accessibility for Polymath in macOS Privacy & Security, then check access here.")
             return
         }
         if monitor == nil {
@@ -91,7 +100,7 @@ private final class DictationBridge {
                 send("status", "Could not watch the global shortcut. Re-enable Input Monitoring and restart Polymath.")
                 return
             }
-            send("status", AXIsProcessTrusted()
+            send("status", accessibility
                 ? "Ready · hold ⌘ + ⌥ in any app"
                 : "Shortcut ready · allow Accessibility for automatic paste")
         }

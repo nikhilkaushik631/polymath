@@ -55,6 +55,9 @@ impl GlobalDictation {
             status if status.starts_with("Allow Input Monitoring") => {
                 DictationPhase::InputMonitoring
             }
+            status if status.starts_with("Allow Accessibility") => {
+                DictationPhase::Accessibility
+            }
             status if status.starts_with("Shortcut ready · allow Accessibility") => {
                 DictationPhase::Accessibility
             }
@@ -243,5 +246,7 @@ mod tests {
         assert_eq!(dictation.phase(), DictationPhase::InputMonitoring);
         dictation.status = "Ready · hold ⌘ + ⌥ in any app".into();
         assert_eq!(dictation.phase(), DictationPhase::Ready);
+        dictation.status = "Allow Accessibility for Polymath in macOS Privacy & Security, then check access here.".into();
+        assert_eq!(dictation.phase(), DictationPhase::Accessibility);
     }
 }
