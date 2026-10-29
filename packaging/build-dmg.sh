@@ -17,10 +17,9 @@ trap 'rm -rf "$staging_dir"' EXIT HUP INT TERM
 mkdir "$staging_dir/contents"
 /usr/bin/ditto "$app_bundle" "$staging_dir/contents/$app_name.app"
 ln -s /Applications "$staging_dir/contents/Applications"
-# Build the HFS image without attaching a temporary device. This also works in
-# build sessions that cannot access DiskImages' device helper.
-/usr/bin/hdiutil makehybrid -hfs -hfs-volume-name "$app_name" -o "$staging_dir/source.dmg" "$staging_dir/contents"
-/usr/bin/hdiutil convert "$staging_dir/source.dmg" -format UDZO -o "$staging_dir/installer.dmg"
+# Create an HFS+ image directly. makehybrid adds FinderInfo to signed helpers,
+# which makes the mounted app fail code-signature verification.
+/usr/bin/hdiutil create -volname "$app_name" -srcfolder "$staging_dir/contents" -fs HFS+ -format UDZO -ov -o "$staging_dir/installer.dmg"
 /usr/bin/hdiutil verify "$staging_dir/installer.dmg"
 mv "$staging_dir/installer.dmg" "$output_dir/$app_name.dmg"
 printf '%s\n' "$output_dir/$app_name.dmg"
