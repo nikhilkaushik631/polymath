@@ -109,23 +109,18 @@ private func pinnedCount() throws -> Int {
     return count
 }
 
-private func copyPinnedRow(_ index: Int, pinnedCount: Int) throws {
+private func copyPinnedRow(_ index: Int) throws {
     try openRaycastHistory()
     let before = board.changeCount
-    let row = index + 2 // row 1 is the Pinned heading
-    let nextHeader = pinnedCount + 2
     _ = try runAppleScript("""
     tell application "System Events" to tell process "Raycast"
         set frontmost to true
-        repeat 4 times
-            set value of scroll bar 1 of scroll area 1 of window 1 to 1
-            delay 0.08
-        end repeat
         set sectionName to value of UI element 1 of UI element 1 of row 1 of table 1 of scroll area 1 of window 1
         if sectionName is not "Pinned" then error "Pinned section changed" number 9003
-        set recentName to value of UI element 1 of UI element 1 of row \(nextHeader) of table 1 of scroll area 1 of window 1
-        if recentName is not "Today" and recentName is not "Yesterday" and recentName is not "Earlier" then error "Pinned section changed" number 9004
-        click row \(row) of table 1 of scroll area 1 of window 1
+        repeat \(index) times
+            key code 125
+            delay 0.025
+        end repeat
         delay 0.06
         key code 36 using {command down}
     end tell
@@ -179,6 +174,16 @@ private func matches(_ existing: Clip, _ incoming: Captured, images: URL) -> Boo
     }
 }
 
+private func samePayload(_ left: Captured, _ right: Captured) -> Bool {
+    guard left.clip.kind == right.clip.kind else { return false }
+    switch left.clip.kind {
+    case "Text": return left.clip.text == right.clip.text
+    case "Files": return left.clip.files == right.clip.files
+    case "Images": return left.image == right.image
+    default: return false
+    }
+}
+
 private func migrate() throws {
     let processes = NSRunningApplication.runningApplications(withBundleIdentifier: "local.polymath.app")
     guard processes.isEmpty else {
@@ -198,11 +203,29 @@ private func migrate() throws {
     print("Raycast pinned entries: \(count)")
     var captured: [Captured] = []
     for offset in 0..<count {
-        try copyPinnedRow(offset, pinnedCount: count)
+        try copyPinnedRow(offset)
         do { captured.append(try capturePinned()) }
         catch { throw ImportError.message("Could not read pinned item \(offset + 1): \(error)") }
     }
     guard captured.count == count else { throw ImportError.message("Raycast pin count changed during import.") }
+    var distinct: [Captured] = []
+    for item in captured where !distinct.contains(where: { samePayload($0, item) }) {
+        distinct.append(item)
+    }
+    guard distinct.count > 1 || count == 1 else {
+        throw ImportError.message("Raycast copied the same selected item repeatedly; Polymath history was left untouched.")
+    }
+
+    if CommandLine.arguments.contains("--repair-duplicate-import") {
+        let previous = history.filter { $0.pinned && $0.source == "Raycast" }
+        guard previous.count == count, let first = previous.first,
+              first.kind == "Text",
+              previous.allSatisfy({ $0.kind == "Text" && $0.text == first.text }) else {
+            throw ImportError.message("The previous import is not the expected repeated-text set; no pins were removed.")
+        }
+        let previousIDs = Set(previous.map(\.id))
+        history.removeAll { previousIDs.contains($0.id) }
+    }
 
     var consumed = Set<String>()
     var inserted: [Captured] = []
@@ -236,7 +259,7 @@ private func migrate() throws {
     let data = try encoder.encode(result)
     try data.write(to: index, options: .atomic)
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: index.path)
-    print("Imported: \(inserted.count), matched existing: \(reused), Polymath pins: \(result.filter(\.pinned).count)")
+    print("Imported: \(inserted.count), distinct: \(distinct.count), matched existing: \(reused), Polymath pins: \(result.filter(\.pinned).count)")
     // Avoid logging titles, paths, text, previews, or image bytes.
 }
 
