@@ -349,9 +349,11 @@ private struct ClipPanelView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: symbol(for: clip))
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(active ? ClipStyle.accent : ClipStyle.muted)
-                    .frame(width: 20)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(iconColor(for: clip))
+                    .frame(width: 29, height: 29)
+                    .background(iconColor(for: clip).opacity(active ? 0.18 : 0.11),
+                                in: RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(clip.title).font(.system(size: 12.5, weight: .medium))
                         .lineLimit(1).truncationMode(.tail)
@@ -483,9 +485,17 @@ private struct ClipPanelView: View {
 
     private func symbol(for clip: Clip) -> String {
         switch clip.kind {
-        case "Images": return "photo"
+        case "Images": return "photo.fill"
         case "Files": return "doc.on.doc"
-        default: return "text.alignleft"
+        default: return "doc.text.fill"
+        }
+    }
+
+    private func iconColor(for clip: Clip) -> Color {
+        switch clip.kind {
+        case "Images": return Color(red: 0.90, green: 0.67, blue: 0.85)
+        case "Files": return Color(red: 0.96, green: 0.75, blue: 0.47)
+        default: return ClipStyle.accent
         }
     }
 }
