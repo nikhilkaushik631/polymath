@@ -68,7 +68,6 @@ private func openRaycastHistory() throws {
         return value of UI element 1 of UI element 1 of row 1 of table 1 of scroll area 1 of window 1
     end tell
     """
-    if (try? runAppleScript(check)) == "Pinned" { return }
     guard NSWorkspace.shared.open(raycastURL) else {
         throw ImportError.message("Could not open Raycast Clipboard History.")
     }
@@ -104,8 +103,7 @@ private func pinnedCount() throws -> Int {
     guard let count = Int(value), count > 0, count <= 100 else {
         throw ImportError.message("Raycast returned an invalid pinned count.")
     }
-    // The deeplink toggles the already-open panel, so close the counting view
-    // before the first Copy action opens it again.
+    // Leave the counting view closed; Raycast's deeplink toggles an open panel.
     _ = try runAppleScript("tell application \"System Events\" to tell process \"Raycast\" to key code 53")
     Thread.sleep(forTimeInterval: 0.1)
     return count
