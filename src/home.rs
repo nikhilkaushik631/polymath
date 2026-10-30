@@ -83,25 +83,24 @@ impl Polymath {
                         }
                         ui.label(RichText::new("/").size(13.0).color(chrome.muted));
                         let accent = self.active.accent(self.dark);
-                        let capsule = chrome
-                            .surface
-                            .lerp_to_gamma(accent, if self.dark { 0.24 } else { 0.11 });
+                        let capsule = chrome.hover;
                         egui::Frame::new()
                             .fill(capsule)
-                            .corner_radius(8)
-                            .inner_margin(egui::Margin::symmetric(10, 5))
+                            .stroke(Stroke::new(1.0, chrome.line))
+                            .corner_radius(7)
+                            .inner_margin(egui::Margin::symmetric(9, 4))
                             .show(ui, |ui| {
                                 ui.horizontal_centered(|ui| {
                                     ui.add(
                                         egui::Image::new(self.active.icon())
-                                            .fit_to_exact_size(vec2(16.0, 16.0))
+                                            .fit_to_exact_size(vec2(15.0, 15.0))
                                             .tint(accent),
                                     );
                                     ui.label(
                                         RichText::new(self.active.label())
                                             .size(13.0)
                                             .strong()
-                                            .color(accent),
+                                            .color(chrome.ink),
                                     );
                                     if self.dirty(self.active) {
                                         ui.label(RichText::new("•").size(15.0).color(accent));

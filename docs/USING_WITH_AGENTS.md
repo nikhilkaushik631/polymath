@@ -66,12 +66,13 @@ Full engine/control references remain in the sibling projects:
 | `app.media.play` / `app.media.pause` | `{}` | Start or pause local playback in Reader |
 | `app.media.seek` | `{seconds: number}` | Seek to a nonnegative time in the active media file |
 | `app.media.volume` | `{value: number}` | Set local player volume from 0 (mute) to 1 (full); reflected in `app.media.inspect` |
+| `app.media.speed` | `{value: number}` | Set audio or video playback speed from 0.25× to 4×; the UI offers six presets |
 | `app.media.previous` / `app.media.next` | `{}` | Play the previous or next file in the opened folder's current order |
 | `app.media.sort` | `{by:"name"|"artist"|"album"}` | Reorder the local music queue without changing files |
 | `app.media.fullscreen` | `{enabled: bool}` | Enter or leave video or music full screen |
 | `app.image.fullscreen` | `{enabled: bool}` | Enter or leave the active read-only image's full-screen view |
 | `app.theme` | `{dark:true/false}` | Select the shared light/dark theme |
-| `app.settings` | `{page:"appearance"/"voice"/"files",visible:true/false}` | Open or close the shared Settings window for inspection; omitted fields open the current page |
+| `app.settings` | `{page:"appearance"/"voice"/"clipboard"/"files"/"info",visible:true/false}` | Open or close the shared Settings window for inspection; Info lists Reader formats and default handlers |
 | `app.dictation.global` | `{enabled?: bool}` | Inspect or change the opt-in systemwide hold-to-dictate shortcut; only enabled in an authorized app session |
 | `app.folders.choose` | `{}` | Show the native chooser; owner must answer |
 | `app.folders.list` | `{}` | Already selected folders and available listings |

@@ -2,18 +2,19 @@
 // Uses only extensions declared by the installed Polymath bundle. Before changing
 // defaults, writes the previous handlers to Application Support for recovery.
 // HTML belongs to the default browser: Polymath still offers Open With for it.
-// Usage: swift packaging/default-documents.swift --check | --set /Applications/Polymath.app
+// Usage: default-documents --check | --status /Applications/Polymath.app | --set /Applications/Polymath.app
 import AppKit
 import CoreServices
 import UniformTypeIdentifiers
 
 let setting = CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--set"
 let checking = CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--check"
-if !setting && !checking {
-    fputs("Usage: swift packaging/default-documents.swift --check | --set /Applications/Polymath.app\n", stderr)
+let reporting = CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--status"
+if !setting && !checking && !reporting {
+    fputs("Usage: default-documents --check | --status /Applications/Polymath.app | --set /Applications/Polymath.app\n", stderr)
     exit(2)
 }
-let application = setting ? URL(fileURLWithPath: CommandLine.arguments[2]) : nil
+let application = (setting || reporting) ? URL(fileURLWithPath: CommandLine.arguments[2]) : nil
 let expected = application ?? URL(fileURLWithPath: "/Applications/Polymath.app")
 guard let bundle = Bundle(url: expected),
       bundle.bundleIdentifier == "local.polymath.app",
@@ -30,7 +31,7 @@ guard !extensions.isEmpty else {
     fputs("Polymath declares no document extensions.\n", stderr)
     exit(1)
 }
-if let application {
+if setting, let application {
     // public.html can also change the http/https handler on macOS. Keep the
     // browser selected in System Settings when setting document defaults.
     for scheme in ["http", "https"] {
@@ -45,7 +46,7 @@ if let application {
     // share an identifier. Remove only that copy's registration, then register
     // the requested installation before choosing its document types.
     let register = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-    let buildCopy = URL(fileURLWithPath: CommandLine.arguments[0])
+    let buildCopy = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("dist/Polymath.app")
     func runRegistration(_ args: [String]) throws {
@@ -81,6 +82,23 @@ for ext in extensions {
         continue
     }
     registeredTypes.append((ext, type))
+}
+if reporting {
+    let assigned = registeredTypes.filter { _, type in
+        NSWorkspace.shared.urlForApplication(toOpen: type)?.standardizedFileURL == expected.standardizedFileURL
+    }.count
+    let report: [String: Any] = [
+        "eligible": extensions.count,
+        "registered": registeredTypes.count,
+        "assigned": assigned,
+        "unresolved": extensions.count - registeredTypes.count
+    ]
+    if let data = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]),
+       let text = String(data: data, encoding: .utf8) {
+        print(text)
+        exit(0)
+    }
+    exit(1)
 }
 if setting {
     let directory = URL(fileURLWithPath: NSHomeDirectory())

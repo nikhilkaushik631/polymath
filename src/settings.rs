@@ -1,6 +1,106 @@
 //! One place for Polymath-wide preferences and local access.
 use crate::{Polymath, Workspace, voice::Voice};
 use egui::{Align, Color32, Layout, RichText, vec2};
+use std::sync::mpsc::{self, Receiver};
+
+#[derive(Default)]
+pub(crate) struct DefaultApps {
+    result: Option<Receiver<Result<serde_json::Value, String>>>,
+    report: Option<serde_json::Value>,
+    loaded: bool,
+    busy: bool,
+    notice: String,
+}
+
+impl DefaultApps {
+    fn poll(&mut self, ctx: &egui::Context) {
+        if let Some(rx) = &self.result {
+            match rx.try_recv() {
+                Ok(Ok(report)) => {
+                    self.report = Some(report);
+                    self.notice = "File defaults checked.".into();
+                    self.busy = false;
+                    self.result = None;
+                }
+                Ok(Err(error)) => {
+                    self.notice = error;
+                    self.busy = false;
+                    self.result = None;
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.notice = "Could not check file defaults.".into();
+                    self.busy = false;
+                    self.result = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(250))
+                }
+            }
+        }
+    }
+
+    fn start(&mut self, set: bool, ctx: &egui::Context) {
+        if self.busy {
+            return;
+        }
+        self.loaded = true;
+        self.busy = true;
+        self.notice = if set {
+            "Waiting for macOS to confirm file defaults…"
+        } else {
+            "Checking Finder defaults…"
+        }
+        .into();
+        let (tx, rx) = mpsc::channel();
+        self.result = Some(rx);
+        if let Err(error) = std::thread::Builder::new()
+            .name("polymath-file-defaults".into())
+            .spawn(move || {
+                let app = "/Applications/Polymath.app";
+                let helper = format!("{app}/Contents/MacOS/PolymathDefaults");
+                let result = (|| -> Result<serde_json::Value, String> {
+                    if !std::path::Path::new(&helper).is_file() {
+                        return Err(
+                            "Install the latest Polymath in Applications to manage file defaults."
+                                .into(),
+                        );
+                    }
+                    if set {
+                        let output = std::process::Command::new(&helper)
+                            .args(["--set", app])
+                            .output()
+                            .map_err(|error| {
+                                format!("Could not start macOS defaults setup: {error}")
+                            })?;
+                        if !output.status.success() {
+                            let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+                            return Err(if detail.is_empty() {
+                                "macOS did not complete the default app change.".into()
+                            } else {
+                                detail
+                            });
+                        }
+                    }
+                    let output = std::process::Command::new(&helper)
+                        .args(["--status", app])
+                        .output()
+                        .map_err(|error| format!("Could not check macOS file defaults: {error}"))?;
+                    if !output.status.success() {
+                        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+                    }
+                    serde_json::from_slice(&output.stdout)
+                        .map_err(|error| format!("Could not read file default status: {error}"))
+                })();
+                let _ = tx.send(result);
+            })
+        {
+            self.busy = false;
+            self.result = None;
+            self.notice = format!("Could not start defaults check: {error}");
+        }
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Page {
@@ -9,6 +109,7 @@ pub(crate) enum Page {
     Voice,
     Clipboard,
     Files,
+    Info,
 }
 
 impl Page {
@@ -18,6 +119,7 @@ impl Page {
             "voice" => Some(Self::Voice),
             "clipboard" => Some(Self::Clipboard),
             "files" => Some(Self::Files),
+            "info" | "formats" => Some(Self::Info),
             _ => None,
         }
     }
@@ -28,6 +130,7 @@ impl Page {
             Self::Voice => "Voice",
             Self::Clipboard => "Clipboard",
             Self::Files => "Files & privacy",
+            Self::Info => "Info & defaults",
         }
     }
     fn icon(self) -> &'static str {
@@ -36,6 +139,7 @@ impl Page {
             Self::Voice => "mic",
             Self::Clipboard => "copy",
             Self::Files => "folder",
+            Self::Info => "info",
         }
     }
 }
@@ -105,7 +209,13 @@ impl Polymath {
                         ui.add_space(8.0);
                         ui.label(RichText::new("Preferences").size(11.5).color(muted));
                         ui.add_space(12.0);
-                        for page in [Page::Appearance, Page::Voice, Page::Clipboard, Page::Files] {
+                        for page in [
+                            Page::Appearance,
+                            Page::Voice,
+                            Page::Clipboard,
+                            Page::Files,
+                            Page::Info,
+                        ] {
                             let icon = pdfcraft_ui_egui::icons::image(
                                 page.icon(),
                                 16.0,
@@ -170,6 +280,7 @@ impl Polymath {
                                 Page::Voice => self.voice_settings(ui, muted),
                                 Page::Clipboard => self.clipboard_settings(ui, ctx, muted),
                                 Page::Files => self.file_settings(ui, frame, ctx, muted),
+                                Page::Info => self.info_settings(ui, ctx, muted),
                             });
                     });
                 });
@@ -470,7 +581,11 @@ impl Polymath {
                     ),
                     DictationPhase::Accessibility => (
                         "Setup needed",
-                        if self.global_dictation.status.starts_with("Allow Accessibility") {
+                        if self
+                            .global_dictation
+                            .status
+                            .starts_with("Allow Accessibility")
+                        {
                             "Accessibility is needed for the shortcut."
                         } else {
                             "Accessibility is needed to paste into other apps."
@@ -864,7 +979,280 @@ impl Polymath {
         );
         });
     }
+
+    fn info_settings(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, muted: Color32) {
+        self.default_apps.poll(ctx);
+        if !self.default_apps.loaded && cfg!(target_os = "macos") {
+            self.default_apps.start(false, ctx);
+        }
+        heading(
+            ui,
+            "Info & defaults",
+            "What Polymath opens, and where each file goes next.",
+            muted,
+        );
+        ui.add_space(12.0);
+        let total = crate::workspace::EXTENSIONS.len();
+        settings_card(ui, self.dark, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(format!("{total}"))
+                        .size(27.0)
+                        .strong()
+                        .color(Workspace::Reader.accent(self.dark)),
+                );
+                ui.vertical(|ui| {
+                    ui.label(RichText::new("file extensions").size(13.0).strong());
+                    ui.label(
+                        RichText::new("All open in Reader first")
+                            .size(11.5)
+                            .color(muted),
+                    );
+                });
+            });
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(
+                    "Edit opens the original in its workspace. Viewing does not change the file.",
+                )
+                .size(11.5)
+                .color(muted),
+            );
+        });
+        ui.add_space(12.0);
+        settings_card(ui, self.dark, |ui| {
+            ui.label(RichText::new("Open with Polymath").size(15.0).strong());
+            ui.add_space(3.0);
+            #[cfg(target_os = "macos")]
+            {
+                let assigned = self
+                    .default_apps
+                    .report
+                    .as_ref()
+                    .and_then(|r| r["assigned"].as_u64())
+                    .unwrap_or(0);
+                let eligible = self
+                    .default_apps
+                    .report
+                    .as_ref()
+                    .and_then(|r| r["eligible"].as_u64())
+                    .unwrap_or((total - 2) as u64);
+                ui.label(RichText::new(format!("{assigned} of {eligible} eligible file types currently open with Polymath in Finder.")).size(11.5).color(muted));
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(
+                            !self.default_apps.busy,
+                            egui::Button::new(
+                                RichText::new("Set file defaults").color(Color32::WHITE),
+                            )
+                            .fill(Workspace::Reader.accent(self.dark))
+                            .corner_radius(7),
+                        )
+                        .on_hover_text(
+                            "Ask macOS to make Polymath the default for supported documents",
+                        )
+                        .clicked()
+                    {
+                        self.default_apps.start(true, ctx);
+                    }
+                    if ui
+                        .add_enabled(
+                            !self.default_apps.busy,
+                            egui::Button::new("Refresh").corner_radius(7),
+                        )
+                        .clicked()
+                    {
+                        self.default_apps.start(false, ctx);
+                    }
+                });
+                if !self.default_apps.notice.is_empty() {
+                    ui.add_space(7.0);
+                    ui.label(
+                        RichText::new(&self.default_apps.notice)
+                            .size(11.0)
+                            .color(muted),
+                    );
+                }
+                ui.add_space(7.0);
+                ui.label(RichText::new("macOS may ask you to approve changes. Your previous handlers are backed up first.").size(11.0).color(muted));
+            }
+            #[cfg(target_os = "windows")]
+            {
+                ui.label(
+                    RichText::new(
+                        "Choose Polymath for supported file types in Windows Default apps.",
+                    )
+                    .size(11.5)
+                    .color(muted),
+                );
+                if ui.button("Open Default apps").clicked() {
+                    let _ = std::process::Command::new("explorer.exe")
+                        .arg("ms-settings:defaultapps")
+                        .spawn();
+                }
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            ui.label(RichText::new("Choose Polymath from your device's Open with menu when a mobile build is available.").size(11.5).color(muted));
+            ui.add_space(7.0);
+            ui.label(
+                RichText::new(
+                    ".html and .htm stay with your browser; both can still open in Reader.",
+                )
+                .size(11.0)
+                .color(muted),
+            );
+        });
+        ui.add_space(18.0);
+        ui.label(
+            RichText::new("SUPPORTED FORMATS")
+                .size(10.5)
+                .strong()
+                .color(muted),
+        );
+        ui.add_space(7.0);
+        ui.add(
+            egui::TextEdit::singleline(&mut self.format_filter)
+                .hint_text("Find an extension or workspace…")
+                .desired_width(f32::INFINITY),
+        );
+        ui.add_space(8.0);
+        let query = self
+            .format_filter
+            .trim()
+            .trim_start_matches('.')
+            .to_ascii_lowercase();
+        for group in FORMAT_GROUPS {
+            let extensions: Vec<&str> = group.extensions.split_whitespace().collect();
+            let matches_group = query.is_empty()
+                || group.name.to_ascii_lowercase().contains(&query)
+                || group.destination.to_ascii_lowercase().contains(&query);
+            let visible: Vec<&str> = if matches_group {
+                extensions.clone()
+            } else {
+                extensions
+                    .iter()
+                    .copied()
+                    .filter(|ext| ext.contains(&query))
+                    .collect()
+            };
+            if visible.is_empty() {
+                continue;
+            }
+            settings_card(ui, self.dark, |ui| {
+                ui.horizontal(|ui| {
+                    let icon = match group.name {
+                        "Archives" => {
+                            egui::Image::new(egui::include_image!("../assets/icons/archive.svg"))
+                                .fit_to_exact_size(vec2(18.0, 18.0))
+                                .tint(Workspace::Reader.accent(self.dark))
+                        }
+                        "Audio" => {
+                            egui::Image::new(egui::include_image!("../assets/icons/music.svg"))
+                                .fit_to_exact_size(vec2(18.0, 18.0))
+                                .tint(Workspace::Reader.accent(self.dark))
+                        }
+                        _ => pdfcraft_ui_egui::icons::image(
+                            group.icon,
+                            18.0,
+                            Workspace::Reader.accent(self.dark),
+                        ),
+                    };
+                    ui.add(icon);
+                    ui.label(RichText::new(group.name).size(13.0).strong());
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(
+                            RichText::new(format!("{} formats", extensions.len()))
+                                .size(10.5)
+                                .color(muted),
+                        );
+                    });
+                });
+                ui.label(RichText::new(group.destination).size(11.0).color(muted));
+                ui.add_space(7.0);
+                ui.horizontal_wrapped(|ui| {
+                    for ext in visible {
+                        egui::Frame::new()
+                            .fill(if self.dark {
+                                Color32::from_rgb(44, 49, 53)
+                            } else {
+                                Color32::from_rgb(235, 239, 241)
+                            })
+                            .corner_radius(5)
+                            .inner_margin(egui::Margin::symmetric(6, 3))
+                            .show(ui, |ui| {
+                                ui.label(RichText::new(format!(".{ext}")).size(10.5).monospace());
+                            });
+                    }
+                });
+            });
+            ui.add_space(8.0);
+        }
+    }
 }
+
+struct FormatGroup {
+    name: &'static str,
+    destination: &'static str,
+    icon: &'static str,
+    extensions: &'static str,
+}
+const FORMAT_GROUPS: &[FormatGroup] = &[
+    FormatGroup {
+        name: "PDF",
+        destination: "Reader · PDF Tools for editing",
+        icon: "file-text",
+        extensions: "pdf",
+    },
+    FormatGroup {
+        name: "Archives",
+        destination: "Reader · browse and extract",
+        icon: "archive",
+        extensions: "zip rar 7z",
+    },
+    FormatGroup {
+        name: "Documents",
+        destination: "Reader · Writer for editing",
+        icon: "file-text",
+        extensions: "docx docm dotx dotm doc dot odt rtf txt md",
+    },
+    FormatGroup {
+        name: "Source & structured text",
+        destination: "Reader · read only source and SVG preview",
+        icon: "code-xml",
+        extensions: "py pyi js mjs cjs jsx ts tsx html htm css scss sass less json jsonl yaml yml toml xml svg rs go java kt swift c h cc cpp hpp cs fs fsx php rb pl lua dart r jl scala sql sh bash zsh fish ps1 bat cmd tex mdx vue svelte astro graphql gql proto ini cfg conf properties gradle ipynb",
+    },
+    FormatGroup {
+        name: "Spreadsheets",
+        destination: "Reader · Sheets for editing",
+        icon: "file-spreadsheet",
+        extensions: "xlsx xlsm xltx xltm xlsb ods csv tsv",
+    },
+    FormatGroup {
+        name: "Presentations",
+        destination: "Reader · Slides for editing",
+        icon: "presentation",
+        extensions: "pptx potx ppsx deckcraft",
+    },
+    FormatGroup {
+        name: "Images",
+        destination: "Reader · Images for editing",
+        icon: "image",
+        extensions: "jpg jpeg png tif tiff webp jxl bmp gif dng cr2 cr3 nef arw raf rw2 orf pef srw",
+    },
+    FormatGroup {
+        name: "Audio",
+        destination: "Reader · local playback and folder queue",
+        icon: "music-2",
+        extensions: "mp3 m4a aac wav aiff aif caf flac ogg opus",
+    },
+    FormatGroup {
+        name: "Video",
+        destination: "Reader · Video timeline for editing",
+        icon: "film",
+        extensions: "mp4 m4v mov webm mkv",
+    },
+];
 
 fn heading(ui: &mut egui::Ui, title: &str, subtitle: &str, muted: Color32) {
     ui.add_space(7.0);
@@ -898,6 +1286,25 @@ fn shortcut_key(ui: &mut egui::Ui, key: &str, dark: bool) {
         .show(ui, |ui| {
             ui.label(RichText::new(key).size(13.0).strong());
         });
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn format_page_covers_every_reader_extension_once() {
+        let listed: Vec<&str> = FORMAT_GROUPS
+            .iter()
+            .flat_map(|group| group.extensions.split_whitespace())
+            .collect();
+        let unique: HashSet<&str> = listed.iter().copied().collect();
+        let reader: HashSet<&str> = crate::workspace::EXTENSIONS.iter().copied().collect();
+        assert_eq!(unique, reader);
+        assert_eq!(listed.len(), unique.len());
+        assert!(unique.contains("html") && unique.contains("htm"));
+    }
 }
 
 fn clipboard_shortcut(key: egui::Key, modifiers: egui::Modifiers) -> Option<String> {

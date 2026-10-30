@@ -87,6 +87,8 @@ struct Polymath {
     global_dictation: global_dictation::GlobalDictation,
     clipboard_history: clipboard_history::ClipboardHistory,
     settings_page: settings::Page,
+    default_apps: settings::DefaultApps,
+    format_filter: String,
     quit_requested: bool,
     force_quit: bool,
     #[cfg(target_os = "macos")]
@@ -197,6 +199,8 @@ impl Polymath {
             global_dictation: global_dictation::GlobalDictation::default(),
             clipboard_history: clipboard_history::ClipboardHistory::default(),
             settings_page: settings::Page::default(),
+            default_apps: settings::DefaultApps::default(),
+            format_filter: String::new(),
             quit_requested: false,
             force_quit: false,
             #[cfg(target_os = "macos")]
@@ -1122,7 +1126,12 @@ impl eframe::App for Polymath {
             }
             Workspace::Reader if self.image_preview.is_some() => {
                 if let Some(image) = &mut self.image_preview {
-                    image.show(ui, self.dark);
+                    let path = image.path.clone();
+                    if image.show(ui, self.dark)
+                        && let Err(error) = self.open_for_edit(&path, ui.ctx())
+                    {
+                        self.notice = Some(error);
+                    }
                 }
             }
             Workspace::Reader if self.archive_preview.is_some() => {
@@ -1672,6 +1681,11 @@ mod tests {
             .click();
         harness.run_steps(2);
         assert_eq!(harness.state().settings_page, settings::Page::Files);
+        harness
+            .get_by_role_and_label(Role::Button, "Info & defaults")
+            .click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().settings_page, settings::Page::Info);
     }
 
     #[test]

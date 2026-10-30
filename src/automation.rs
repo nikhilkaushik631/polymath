@@ -251,6 +251,7 @@ impl Polymath {
             | "app.media.previous"
             | "app.media.sort"
             | "app.media.volume"
+            | "app.media.speed"
             | "app.media.fullscreen" => {
                 if self.active != Workspace::Reader {
                     control::error("Open an audio or video file in Reader first")
@@ -274,6 +275,13 @@ impl Polymath {
                             .and_then(Value::as_f64)
                             .ok_or_else(|| "value must be a number from 0 to 1".to_owned())
                             .and_then(|value| media.set_volume(value as f32)),
+                        "app.media.speed" => p
+                            .get("value")
+                            .and_then(Value::as_f64)
+                            .ok_or_else(|| {
+                                "value must be a playback rate from 0.25 to 4".to_owned()
+                            })
+                            .and_then(|value| media.set_speed(value)),
                         "app.media.fullscreen" => p
                             .get("enabled")
                             .and_then(Value::as_bool)

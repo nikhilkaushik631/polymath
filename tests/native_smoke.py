@@ -39,7 +39,7 @@ try:
  assert call('app.inspect')['workspace']=='home'
  assert call('app.folders.list')['folders']==[]
  shot('home-light')
- for page in ('appearance','voice','clipboard','files'):
+ for page in ('appearance','voice','clipboard','files','info'):
   assert call('app.settings',{'page':page})=={'visible':True,'page':page}
   shot('settings-'+page+'-light')
  call('app.theme',{'dark':True});call('app.settings',{'page':'appearance'});shot('settings-appearance-dark')
@@ -78,6 +78,8 @@ try:
     time.sleep(.2)
    assert abs(call('app.media.volume',{'value':0.35})['queue']['volume']-0.35)<0.01
    assert abs(call('app.media.volume',{'value':1.0})['queue']['volume']-1.0)<0.01
+   assert abs(call('app.media.speed',{'value':0.5})['queue']['speed']-0.5)<0.01
+   assert abs(call('app.media.speed',{'value':1.0})['queue']['speed']-1.0)<0.01
    shot(name+'-viewer-light')
    call('app.theme',{'dark':True});shot(name+'-viewer-dark');call('app.theme',{'dark':False})
    assert call('app.media.fullscreen',{'enabled':True})['queue']['fullscreen'] is True

@@ -39,6 +39,7 @@ pub struct MediaView {
     state: State,
     player: Player,
     output_gain: Arc<AtomicU32>,
+    speed: f64,
     queue: Queue,
     seek_to: f64,
     auto_play_when_ready: bool,
@@ -61,6 +62,7 @@ enum Action {
     Select(std::path::PathBuf),
     Queue(bool),
     Volume(f32),
+    Speed(f64),
     FitVideo,
 }
 
@@ -75,6 +77,7 @@ impl MediaView {
             state,
             player: Player::new(Some(Box::new(CpalOut::with_gain(output_gain.clone())))),
             output_gain,
+            speed: 1.0,
             queue,
             seek_to: 0.0,
             auto_play_when_ready: false,
@@ -130,6 +133,7 @@ impl MediaView {
             "fullscreen":self.fullscreen,
             "videoZoom":self.video_zoom,
             "volume":self.volume(),
+            "speed":self.speed,
         });
         match &self.state {
             State::Loading(_) => {
@@ -211,6 +215,15 @@ impl MediaView {
         Ok(())
     }
 
+    pub fn set_speed(&mut self, speed: f64) -> Result<(), String> {
+        if !speed.is_finite() || !(0.25..=4.0).contains(&speed) {
+            return Err("Playback speed must be from 0.25× to 4×.".into());
+        }
+        self.speed = speed;
+        self.player.set_speed(VOICE, speed);
+        Ok(())
+    }
+
     pub fn set_fullscreen(&mut self, ctx: &egui::Context, enabled: bool) -> Result<(), String> {
         self.fullscreen = enabled;
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(enabled));
@@ -236,6 +249,7 @@ impl MediaView {
             },
             self.player.status(VOICE).is_none().then_some(self.seek_to),
         );
+        self.player.set_speed(VOICE, self.speed);
         self.end_handled = false;
         Ok(())
     }
@@ -433,25 +447,6 @@ impl MediaView {
                         .clicked()
                         {
                             action = Some(Action::Queue(!self.queue_open));
-                        }
-                        ui.add_space(8.0);
-                        let full_screen_icon = |p: &egui::Painter, center, _, color| {
-                            draw_fullscreen_enter_icon(p, center, color);
-                        };
-                        if Button::new("Full screen")
-                            .variant(ButtonVariant::Ghost)
-                            .size(ButtonSize::IconSm)
-                            .radius(ButtonRadius::Medium)
-                            .icon(&full_screen_icon)
-                            .show(ui, &theme)
-                            .on_hover_text(if self.queue.kind == Kind::Video {
-                                "Play video full screen · double-click video"
-                            } else {
-                                "Open music full screen"
-                            })
-                            .clicked()
-                        {
-                            action = Some(Action::Fullscreen(true));
                         }
                         if self.queue.kind == Kind::Video && self.video_zoom > 1.01 {
                             ui.add_space(8.0);
@@ -749,6 +744,27 @@ impl MediaView {
                                                         .strong()
                                                         .color(muted),
                                                 );
+                                                ui.add_space(8.0);
+                                                show_speed(ui, self.speed, &mut action);
+                                                let full_screen_icon =
+                                                    |p: &egui::Painter, center, _, color| {
+                                                        draw_fullscreen_enter_icon(
+                                                            p, center, color,
+                                                        );
+                                                    };
+                                                if Button::new("Full screen")
+                                                    .variant(ButtonVariant::Ghost)
+                                                    .size(ButtonSize::IconSm)
+                                                    .radius(ButtonRadius::Medium)
+                                                    .icon(&full_screen_icon)
+                                                    .show(ui, &theme)
+                                                    .on_hover_text(
+                                                        "Full screen · double-click video",
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    action = Some(Action::Fullscreen(true));
+                                                }
                                             },
                                         );
                                     },
@@ -892,6 +908,7 @@ impl MediaView {
                     .inner_margin(egui::Margin::same(0)),
             )
             .show(ui, |ui| {
+                *ui.visuals_mut() = egui::Visuals::dark();
                 ui.visuals_mut().override_text_color = Some(Color32::WHITE);
                 let width = ui.available_width().max(320.0);
                 let narrow_controls = width < 900.0;
@@ -1028,6 +1045,7 @@ impl MediaView {
                                 &theme,
                                 kind == Kind::Video && self.video_zoom > 1.01,
                                 &mut volume,
+                                self.speed,
                                 &mut action,
                             );
                         });
@@ -1047,6 +1065,7 @@ impl MediaView {
                                     &theme,
                                     kind == Kind::Video && self.video_zoom > 1.01,
                                     &mut volume,
+                                    self.speed,
                                     &mut action,
                                 );
                             },
@@ -1080,6 +1099,7 @@ impl MediaView {
                 Ok(())
             }
             Action::Volume(volume) => self.set_volume(volume),
+            Action::Speed(speed) => self.set_speed(speed),
             Action::FitVideo => {
                 self.video_zoom = 1.0;
                 self.video_pan = Vec2::ZERO;
@@ -1190,6 +1210,7 @@ fn show_fullscreen_volume(
     theme: &egui_shadcn::Theme,
     show_fit: bool,
     volume: &mut f32,
+    speed: f64,
     action: &mut Option<Action>,
 ) {
     let exit_icon = |p: &egui::Painter, center, _, color| {
@@ -1222,6 +1243,7 @@ fn show_fullscreen_volume(
             *action = Some(Action::FitVideo);
         }
     }
+    show_speed(ui, speed, action);
     if ui
         .add_sized(
             [92.0, 20.0],
@@ -1238,6 +1260,22 @@ fn show_fullscreen_volume(
             .strong()
             .color(Color32::from_rgb(174, 190, 198)),
     );
+}
+
+fn show_speed(ui: &mut egui::Ui, speed: f64, action: &mut Option<Action>) {
+    egui::ComboBox::from_id_salt("reader-playback-speed")
+        .selected_text(format!("{speed}×"))
+        .width(60.0)
+        .show_ui(ui, |ui| {
+            for preset in [0.5_f64, 0.75, 1.0, 1.25, 1.5, 2.0] {
+                if ui
+                    .selectable_label((speed - preset).abs() < 0.001, format!("{preset}×"))
+                    .clicked()
+                {
+                    *action = Some(Action::Speed(preset));
+                }
+            }
+        });
 }
 
 fn apply_anchored_zoom(

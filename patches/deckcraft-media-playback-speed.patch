@@ -1,0 +1,88 @@
+diff --git a/crates/media/src/player.rs b/crates/media/src/player.rs
+index 9ac4a804..10ec9eb8 100644
+--- a/crates/media/src/player.rs
++++ b/crates/media/src/player.rs
+@@ -72,6 +72,7 @@ struct Voice {
+     spec: VoiceSpec,
+     t: f64,
+     state: PlayState,
++    speed: f64,
+ }
+ 
+ impl Voice {
+@@ -151,12 +152,12 @@ impl Mixer {
+                                 }
+                             }
+                         }
+-                        v.t += step;
++                        v.t += step * v.speed;
+                     }
+                 }
+                 _ => {
+                     // Silent: just run the clock.
+-                    let mut left = frames as f64 * step;
++                    let mut left = frames as f64 * step * v.speed;
+                     while left > 0.0 {
+                         let room = end - v.t;
+                         if left < room {
+@@ -255,7 +256,7 @@ impl Player {
+                 v.state = PlayState::Playing;
+             } else {
+                 let t = from.unwrap_or(spec.clip.range(spec.duration).0);
+-                m.voices.push(Voice { key, audio, spec, t, state: PlayState::Playing });
++                m.voices.push(Voice { key, audio, spec, t, state: PlayState::Playing, speed: 1.0 });
+             }
+         });
+         self.ensure_stream();
+@@ -291,6 +292,20 @@ impl Player {
+         });
+     }
+ 
++    /// Set playback rate for a voice. The media clock and audio samples advance
++    /// together, keeping video in sync with audio at the selected rate.
++    /// This changes pitch; it does not perform time stretching.
++    pub fn set_speed(&mut self, key: u64, speed: f64) {
++        if !speed.is_finite() || !(0.25..=4.0).contains(&speed) {
++            return;
++        }
++        self.with(|m| {
++            if let Some(voice) = m.voices.iter_mut().find(|voice| voice.key == key) {
++                voice.speed = speed;
++            }
++        });
++    }
++
+     /// Remove voice `key`.
+     pub fn stop(&mut self, key: u64) {
+         self.with(|m| m.voices.retain(|v| v.key != key));
+@@ -463,6 +478,7 @@ mod tests {
+                 spec: VoiceSpec { clip, looping: false, duration: 1.0, audio: true },
+                 t: 0.0,
+                 state: PlayState::Playing,
++                speed: 1.0,
+             }],
+         };
+         let mut buf = vec![0.0f32; 2 * 12];
+@@ -476,6 +492,22 @@ mod tests {
+         assert_eq!(m.voices[0].state, PlayState::Ended);
+     }
+ 
++    #[test]
++    fn playback_speed_moves_media_clock_at_selected_rate() {
++        let mut player = Player::new(None);
++        let bytes = Arc::new(Vec::new());
++        player.play(1, 1, &bytes, spec(8.0, false), Some(0.0));
++        player.set_speed(1, 2.0);
++        player.tick(0.0);
++        player.tick(0.2);
++        let fast = player.status(1).map(|status| status.position).unwrap_or_default();
++        assert!((fast - 0.4).abs() < 0.001, "{fast}");
++        player.set_speed(1, 0.5);
++        player.tick(0.4);
++        let slow = player.status(1).map(|status| status.position).unwrap_or_default();
++        assert!((slow - 0.5).abs() < 0.001, "{slow}");
++    }
++
+     #[test]
+     fn device_clock_drives_position() {
+         struct Fake(Arc<Mutex<Option<Box<dyn FnMut(&mut [f32], usize, u32) + Send>>>>);

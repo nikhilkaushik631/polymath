@@ -16,10 +16,12 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/licenses"
 cp "$binary" "$app/Contents/MacOS/Polymath"
 /usr/bin/swiftc -O "$root/packaging/PolymathRecorder.swift" -o "$app/Contents/MacOS/PolymathRecorder"
 /usr/bin/swiftc -O "$root/packaging/PolymathGlobalDictation.swift" "$root/packaging/PolymathClipboard.swift" -o "$app/Contents/MacOS/PolymathGlobalDictation"
+/usr/bin/swiftc -O "$root/packaging/default-documents.swift" -o "$app/Contents/MacOS/PolymathDefaults"
 # These helpers use the app's designated requirement so that macOS recognizes
 # the same privacy grant when Polymath launches them as child processes.
 /usr/bin/codesign --force --sign "$signing_identity" --identifier local.polymath.app "$app/Contents/MacOS/PolymathGlobalDictation"
 /usr/bin/codesign --force --sign "$signing_identity" --identifier local.polymath.app "$app/Contents/MacOS/PolymathRecorder"
+/usr/bin/codesign --force --sign "$signing_identity" --identifier local.polymath.defaults "$app/Contents/MacOS/PolymathDefaults"
 speech="$root/../speech-engine"
 model="$speech/models/ggml-small-q5_1.bin"
 cli="$speech/build/bin/whisper-cli"

@@ -1,6 +1,5 @@
 //! Read-only local image viewing; editing is an explicit handoff to Lightcraft.
 use egui::{Color32, ColorImage, Rect, Sense, TextureHandle, TextureOptions, Vec2, pos2, vec2};
-use egui_shadcn::{Button, ButtonRadius, ButtonSize, ButtonVariant};
 use std::{
     path::Path,
     sync::mpsc::{self, Receiver},
@@ -133,9 +132,11 @@ impl ImageView {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, dark: bool) {
+    /// Returns true when the viewer's Edit action is chosen.
+    pub fn show(&mut self, ui: &mut egui::Ui, dark: bool) -> bool {
         let fullscreen = self.fullscreen;
         let mut toggle_fullscreen = false;
+        let mut edit_requested = false;
         if fullscreen && ui.ctx().input(|i| i.key_pressed(egui::Key::Escape)) {
             toggle_fullscreen = true;
         }
@@ -156,10 +157,9 @@ impl ImageView {
         } else {
             Color32::from_rgb(102, 108, 115)
         };
-        let theme = crate::ui_kit::theme(dark || fullscreen, crate::Workspace::Reader);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(canvas).inner_margin(if fullscreen {
-                egui::Margin::symmetric(12, 8)
+                egui::Margin::same(0)
             } else {
                 egui::Margin::symmetric(24, 16)
             }))
@@ -184,14 +184,14 @@ impl ImageView {
                         );
                     }
                     State::Ready(image) => {
-                        // Leave room for the controls even when the window is narrow
-                        // enough to wrap them onto two or three rows.
-                        let controls_height = if ui.available_width() < 410.0 {
-                            150.0
-                        } else if ui.available_width() < 600.0 {
-                            108.0
+                        // Full screen gives every available pixel to the image. Its
+                        // controls float over the canvas only near the top edge.
+                        let controls_height = if fullscreen {
+                            0.0
+                        } else if ui.available_width() < 560.0 {
+                            102.0
                         } else {
-                            70.0
+                            56.0
                         };
                         let viewport = vec2(
                             ui.available_width(),
@@ -218,8 +218,9 @@ impl ImageView {
                             toggle_fullscreen = true;
                         }
                         let size = vec2(image.width.max(1) as f32, image.height.max(1) as f32);
-                        let fit = ((rect.width() - 28.0).max(1.0) / size.x)
-                            .min((rect.height() - 28.0).max(1.0) / size.y);
+                        let inset = if fullscreen { 0.0 } else { 28.0 };
+                        let fit = ((rect.width() - inset).max(1.0) / size.x)
+                            .min((rect.height() - inset).max(1.0) / size.y);
                         let (pinch, pointer, scroll) = ui.input(|input| {
                             (
                                 input.zoom_delta(),
@@ -255,10 +256,11 @@ impl ImageView {
                             Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
                             Color32::WHITE,
                         );
+                        if fullscreen {
+                            return;
+                        }
                         ui.add_space(9.0);
-                        let strip = if fullscreen {
-                            Color32::from_rgb(27, 29, 33)
-                        } else if dark {
+                        let strip = if dark {
                             Color32::from_rgb(35, 38, 42)
                         } else {
                             Color32::from_rgb(242, 244, 246)
@@ -275,82 +277,148 @@ impl ImageView {
                                             image.original_width, image.original_height
                                         ))
                                         .size(11.0)
-                                        .color(
-                                            if fullscreen {
-                                                Color32::from_rgb(190, 194, 199)
-                                            } else {
-                                                muted
-                                            },
-                                        ),
+                                        .color(muted),
                                     );
-                                    ui.add_space(14.0);
-                                    if Button::new("Fit to window")
-                                        .variant(ButtonVariant::Outline)
-                                        .size(ButtonSize::Sm)
-                                        .radius(ButtonRadius::Medium)
-                                        .show(ui, &theme)
-                                        .clicked()
+                                    ui.add_space(8.0);
+                                    if crate::theme_button::icon(
+                                        ui,
+                                        "scan",
+                                        "Fit image to window",
+                                        dark,
+                                        false,
+                                        ink,
+                                    )
+                                    .clicked()
                                     {
                                         self.zoom = 1.0;
                                         self.pan = Vec2::ZERO;
                                     }
-                                    ui.add_space(8.0);
-                                    if Button::new("−")
-                                        .variant(ButtonVariant::Outline)
-                                        .size(ButtonSize::Sm)
-                                        .radius(ButtonRadius::Medium)
-                                        .show(ui, &theme)
-                                        .on_hover_text("Zoom out")
-                                        .clicked()
+                                    if crate::theme_button::icon(
+                                        ui, "minus", "Zoom out", dark, false, ink,
+                                    )
+                                    .clicked()
                                     {
                                         self.zoom = (self.zoom / 1.25).max(1.0);
                                     }
                                     ui.label(
                                         egui::RichText::new(format!("{:.2}×", self.zoom))
                                             .monospace()
-                                            .color(if fullscreen {
-                                                Color32::from_rgb(190, 194, 199)
-                                            } else {
-                                                muted
-                                            }),
+                                            .color(muted),
                                     )
                                     .on_hover_text("Zoom relative to Fit to window");
-                                    if Button::new("+")
-                                        .variant(ButtonVariant::Outline)
-                                        .size(ButtonSize::Sm)
-                                        .radius(ButtonRadius::Medium)
-                                        .show(ui, &theme)
-                                        .on_hover_text("Zoom in")
-                                        .clicked()
+                                    if crate::theme_button::icon(
+                                        ui, "plus", "Zoom in", dark, false, ink,
+                                    )
+                                    .clicked()
                                     {
                                         self.zoom = (self.zoom * 1.25).min(8.0);
                                     }
-                                    ui.add_space(14.0);
-                                    if Button::new(if fullscreen {
-                                        "Exit full screen"
-                                    } else {
-                                        "Full screen"
-                                    })
-                                    .variant(ButtonVariant::Outline)
-                                    .size(ButtonSize::Sm)
-                                    .radius(ButtonRadius::Medium)
-                                    .show(ui, &theme)
-                                    .on_hover_text(if fullscreen {
-                                        "Exit full screen · Esc"
-                                    } else {
-                                        "View image full screen · double-click image"
-                                    })
+                                    if crate::theme_button::icon(
+                                        ui,
+                                        "maximize",
+                                        "View full screen · double-click image",
+                                        dark,
+                                        false,
+                                        ink,
+                                    )
                                     .clicked()
                                     {
                                         toggle_fullscreen = true;
+                                    }
+                                    ui.add_space(12.0);
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                egui::RichText::new("Edit image").color(if dark {
+                                                    Color32::BLACK
+                                                } else {
+                                                    Color32::WHITE
+                                                }),
+                                            )
+                                            .fill(crate::Workspace::Images.accent(dark))
+                                            .corner_radius(7),
+                                        )
+                                        .on_hover_text("Open the original in Images")
+                                        .clicked()
+                                    {
+                                        edit_requested = true;
                                     }
                                 })
                             });
                     }
                 }
             });
+        if fullscreen {
+            let pointer_near_top = ui
+                .ctx()
+                .input(|input| input.pointer.hover_pos().is_some_and(|p| p.y < 76.0));
+            if pointer_near_top {
+                egui::Area::new(egui::Id::new("image-fullscreen-actions"))
+                    .anchor(egui::Align2::RIGHT_TOP, vec2(-18.0, 16.0))
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::new()
+                            .fill(Color32::from_rgba_unmultiplied(24, 27, 31, 220))
+                            .corner_radius(9)
+                            .inner_margin(egui::Margin::symmetric(5, 4))
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    if crate::theme_button::icon(
+                                        ui,
+                                        "scan",
+                                        "Fit image to window",
+                                        true,
+                                        false,
+                                        Color32::WHITE,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.zoom = 1.0;
+                                        self.pan = Vec2::ZERO;
+                                    }
+                                    if crate::theme_button::icon(
+                                        ui,
+                                        "minus",
+                                        "Zoom out",
+                                        true,
+                                        false,
+                                        Color32::WHITE,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.zoom = (self.zoom / 1.25).max(1.0);
+                                    }
+                                    if crate::theme_button::icon(
+                                        ui,
+                                        "plus",
+                                        "Zoom in",
+                                        true,
+                                        false,
+                                        Color32::WHITE,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.zoom = (self.zoom * 1.25).min(8.0);
+                                    }
+                                    if crate::theme_button::icon(
+                                        ui,
+                                        "minimize",
+                                        "Exit full screen · Esc",
+                                        true,
+                                        false,
+                                        Color32::WHITE,
+                                    )
+                                    .clicked()
+                                    {
+                                        toggle_fullscreen = true;
+                                    }
+                                });
+                            });
+                    });
+            }
+        }
         if toggle_fullscreen {
             self.set_fullscreen(ui.ctx(), !fullscreen);
         }
+        edit_requested
     }
 }
